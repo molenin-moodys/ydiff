@@ -728,6 +728,13 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 // dispatch takes priority (mirrors Model.handleOverlayMouse), then wheel and
 // left-click are handled; every other button is a no-op, matching the
 // review screen's handleMouse.
+//
+// Left-button handling additionally drives a divider drag (task 4): a press
+// that lands on a divider (dividerAt >= 0) starts a drag instead of falling
+// through to clickBrowser's ordinary entry-selection behavior; motion events
+// while a drag is active recompute the widths via resizeDividerTo; release
+// ends the drag. Motion or release with no drag in progress is a no-op —
+// there is nothing to swallow a normal click-drag-elsewhere sequence into.
 func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if b.overlay != nil && b.overlay.Active() {
 		return b.handleBrowserOverlayMouse(msg)
@@ -745,10 +752,30 @@ func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 		}
 		return b.handleBrowserWheel(1)
 	case tea.MouseButtonLeft:
-		if msg.Action != tea.MouseActionPress {
+		switch msg.Action {
+		case tea.MouseActionPress:
+			if d := b.dividerAt(msg.X, msg.Y); d >= 0 {
+				b.drag = browserDrag{active: true, divider: d}
+				return b, nil
+			}
+			return b.clickBrowser(msg.X, msg.Y)
+		case tea.MouseActionMotion:
+			if !b.drag.active {
+				return b, nil
+			}
+			b.resizeDividerTo(b.drag.divider, msg.X)
+			return b, nil
+		case tea.MouseActionRelease:
+			if !b.drag.active {
+				return b, nil
+			}
+			b.drag = browserDrag{}
+			// task 5 wires the persist-on-release command here; until then
+			// releasing a drag has no further side effect.
+			return b, nil
+		default:
 			return b, nil
 		}
-		return b.clickBrowser(msg.X, msg.Y)
 	default:
 		return b, nil
 	}

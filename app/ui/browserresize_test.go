@@ -1,6 +1,14 @@
 package ui
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 // TestBrowserScreen_DividerAt_WideTier verifies both dividers are found at
 // their exact geometry (per the design's Technical Details table) in the
@@ -236,4 +244,83 @@ func TestBrowserScreen_ResizeDividerTo_MediumTierPreservesParentShare(t *testing
 	if b2.widths[0] != 15 {
 		t.Fatalf("widths[0] = %d, want 15 (unchanged, zero-denominator guard)", b2.widths[0])
 	}
+}
+
+// mouseMotion and mouseRelease build a left-button tea.MouseMsg for the
+// respective action, mirroring leftClick in browsermouse_test.go.
+func mouseMotion(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion}
+}
+
+func mouseRelease(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease}
+}
+
+// TestBrowserMouse_DragDivider_PressMotionRelease_ChangesWidths drives a full
+// press → motion → release sequence through handleBrowserMouse on a divider
+// and asserts the widths actually moved.
+func TestBrowserMouse_DragDivider_PressMotionRelease_ChangesWidths(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+
+	before := root.browser.effectiveWidths()
+	ph := root.browser.paneContentHeight()
+
+	available := max(root.browser.width-6, 0)
+	cells := distributeWidths(available, []int{before[0], before[1], before[2]})
+	div0X := cells[0] + 1
+
+	updated, cmd := root.Update(leftClick(div0X, ph/2+1))
+	root = updated.(RootModel)
+	assert.Nil(t, cmd, "starting a drag issues no command")
+	require.True(t, root.browser.drag.active, "press on a divider starts a drag")
+	assert.Equal(t, 0, root.browser.drag.divider)
+
+	updated, _ = root.Update(mouseMotion(div0X+5, ph/2+1))
+	root = updated.(RootModel)
+	assert.True(t, root.browser.drag.active, "drag stays active through motion")
+	assert.NotEqual(t, before, root.browser.effectiveWidths(), "motion while dragging recomputes widths")
+
+	updated, _ = root.Update(mouseRelease(div0X+5, ph/2+1))
+	root = updated.(RootModel)
+	assert.False(t, root.browser.drag.active, "release ends the drag")
+}
+
+// TestBrowserMouse_PressOnEntry_StillSelects verifies the divider-drag path
+// added in task 4 does not swallow ordinary clicks on entry rows: a press
+// that misses every divider still falls through to clickBrowser.
+func TestBrowserMouse_PressOnEntry_StillSelects(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("y"), 0o600))
+	root := wideBrowserRoot(t, dir)
+
+	currentX, _ := root.browser.columnXRanges()
+	require.NotEqual(t, -1, currentX[0])
+
+	updated, _ := root.Update(leftClick(currentX[0]+1, 2))
+	root = updated.(RootModel)
+
+	assert.False(t, root.browser.drag.active, "an ordinary entry click never starts a drag")
+	assert.Equal(t, BrowserFocusCurrent, root.browser.focus)
+	assert.Equal(t, 0, root.browser.nav.Cursor(), "click on the first entry row selects the first entry")
+}
+
+// TestBrowserMouse_MotionWithoutDrag_IsNoOp verifies a motion event with no
+// preceding press on a divider does not touch the widths.
+func TestBrowserMouse_MotionWithoutDrag_IsNoOp(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+
+	before := root.browser.effectiveWidths()
+	ph := root.browser.paneContentHeight()
+
+	updated, cmd := root.Update(mouseMotion(root.browser.width/2, ph/2+1))
+	root = updated.(RootModel)
+
+	assert.Nil(t, cmd)
+	assert.False(t, root.browser.drag.active)
+	assert.Equal(t, before, root.browser.effectiveWidths(), "motion with no drag in progress must not change widths")
 }

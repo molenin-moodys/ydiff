@@ -336,7 +336,22 @@ type browserScreen struct {
 	// --browser-widths flag). A zero value means "use defaultBrowserWidths".
 	widths [3]int
 
+	// drag tracks an in-progress divider drag (task 4's mouse-driven pane
+	// resize). It is plain value state on browserScreen like everything else
+	// here: RootModel.updateBrowser assigns the updated browserScreen back
+	// after every Update, so the drag survives across the press/motion/
+	// release sequence of mouse events the same way widths or focus does.
+	drag browserDrag
+
 	width, height int
+}
+
+// browserDrag is the in-progress state of a divider drag: which divider (if
+// any) is currently being dragged. active is false between drags; divider is
+// only meaningful while active is true.
+type browserDrag struct {
+	active  bool
+	divider int
 }
 
 // effectiveWidths returns b.widths, falling back to defaultBrowserWidths
@@ -368,6 +383,11 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		b.width, b.height = msg.Width, msg.Height
+		// The geometry a drag started from (column x-ranges, divider
+		// positions) no longer exists once the terminal resizes, so any
+		// in-progress drag is abandoned rather than resuming against stale
+		// coordinates.
+		b.drag = browserDrag{}
 		return b, nil
 	case browser.LoadedMsg:
 		b.nav.Apply(msg)

@@ -280,26 +280,26 @@ wins on the next launch, as with every other config-file key.
 - Modify: `app/ui/mouse.go`
 - Modify: `app/ui/browserresize_test.go`
 
-- [ ] add a `drag browserDrag` field to `browserScreen` (`app/ui/root.go`) where
+- [x] add a `drag browserDrag` field to `browserScreen` (`app/ui/root.go`) where
       `browserDrag` is `struct{ active bool; divider int }`, documenting that
       `RootModel.updateBrowser` assigns the updated screen back so the state
       survives between events
-- [ ] in `handleBrowserMouse`, on `tea.MouseButtonLeft` + `tea.MouseActionPress`,
+- [x] in `handleBrowserMouse`, on `tea.MouseButtonLeft` + `tea.MouseActionPress`,
       start a drag when `dividerAt` returns `>= 0` and only otherwise fall
       through to `clickBrowser`
-- [ ] handle `tea.MouseActionMotion` with `tea.MouseButtonLeft` while
+- [x] handle `tea.MouseActionMotion` with `tea.MouseButtonLeft` while
       `drag.active` by calling `resizeDividerTo`
-- [ ] handle `tea.MouseActionRelease` by clearing `drag.active` and returning
+- [x] handle `tea.MouseActionRelease` by clearing `drag.active` and returning
       the persist command (task 5 supplies it; until then return `nil` and wire
       it in task 5)
-- [ ] clear `drag.active` on `tea.WindowSizeMsg` — the geometry the drag started
+- [x] clear `drag.active` on `tea.WindowSizeMsg` — the geometry the drag started
       from no longer exists
-- [ ] write a test driving press → motion → release through
+- [x] write a test driving press → motion → release through
       `handleBrowserMouse` and asserting the widths change
-- [ ] write a test that a press on an ordinary entry row still selects, i.e. the
+- [x] write a test that a press on an ordinary entry row still selects, i.e. the
       drag path did not swallow normal clicks
-- [ ] write a test that motion without a preceding press on a divider is a no-op
-- [ ] run `go test ./app/ui/...` — must pass before task 5
+- [x] write a test that motion without a preceding press on a divider is a no-op
+- [x] run `go test ./app/ui/...` — must pass before task 5
 
 ### Task 5: The persistence seam in app/ui
 
