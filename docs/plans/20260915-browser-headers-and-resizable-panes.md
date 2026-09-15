@@ -407,16 +407,20 @@ wins on the next launch, as with every other config-file key.
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
-- [ ] README: document mouse-dragging the pane borders and that the result is
+- [x] README: document mouse-dragging the pane borders and that the result is
       saved to `~/.config/ydiff/config` as `browser-widths`
-- [ ] README: drop any mention of the per-column directory header from the
-      browser section
-- [ ] CLAUDE.md: record the per-pane content-row offsets (current `y-2`, changed
+- [x] README: drop any mention of the per-column directory header from the
+      browser section (verified: the browser-screen section never mentioned a
+      directory-name header row to begin with; only the changed pane's
+      `changed - <scope>` header is documented, and that is unchanged)
+- [x] CLAUDE.md: record the per-pane content-row offsets (current `y-2`, changed
       `y-3`) in the browser-screen gotcha, since that is exactly the kind of
       coupling that silently breaks
-- [ ] CLAUDE.md: record that `browserChromeRows` is the single source of the
+- [x] CLAUDE.md: record that `browserChromeRows` is the single source of the
       pane-height math and that `browserScreen.View` must not re-derive it
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/` (skipped intentionally - the
+      harness moves the plan file after all phases finish; moving it mid-run
+      would break later review/finalize/stats phases that read this path)
 
 ## Post-Completion
 

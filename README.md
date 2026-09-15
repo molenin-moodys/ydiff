@@ -86,7 +86,7 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | `Tab` | move focus between the current-directory column and the changed-files pane |
 | `q` | quit |
 | `?` | help |
-| mouse | click to select or enter, wheel to scroll; the scope label in the changed-files header is clickable |
+| mouse | click to select or enter, wheel to scroll; the scope label in the changed-files header is clickable; drag the border between two columns to resize them |
 
 ### Changing directory on exit
 
@@ -122,6 +122,14 @@ current/changed proportions are reused for the remaining two columns (see
 | >= 100 columns | all three: parent, current, changed-files |
 | 60–99 columns | current + changed-files only (parent column dropped) |
 | < 60 columns | only the focused pane |
+
+### Resizing columns
+
+Drag the border between two visible columns with the mouse to resize them; a small
+minimum width keeps a column from being dragged down to nothing. The result is written
+back to `~/.config/ydiff/config` as `browser-widths`, so it survives a restart — an
+explicit `--browser-widths` on the command line still overrides it, as with any other
+config-file value.
 
 ## The review screen
 
