@@ -148,6 +148,21 @@ func (r RootModel) WithFavoritesService(svc FavoritesService) RootModel {
 	return r
 }
 
+// WithThemeCatalog attaches cat as the browser screen's theme catalog for
+// the shared theme-selector popup (T), returning the updated RootModel.
+// activeName positions the selector's cursor on the currently-applied
+// theme; noColors mirrors Model's --no-colors override, so choosing a
+// theme in the browser never re-enables color once the flag disabled it.
+// Mirrors WithFavoritesService/WithBrowserWidthsPersister: a
+// post-construction setter, nil cat (or never calling this) makes T a
+// silent no-op.
+func (r RootModel) WithThemeCatalog(cat ThemeCatalog, activeName string, noColors bool) RootModel {
+	r.browser.themes = cat
+	r.browser.activeThemeName = activeName
+	r.browser.noColors = noColors
+	return r
+}
+
 // Init initializes whichever screen the root starts on. The bare-browser
 // entry point's initial directory load command is issued by browser.NewNav
 // itself and is the caller's responsibility to run alongside this one; the
@@ -394,6 +409,20 @@ type browserScreen struct {
 	// how a nil gitCache disables the changed-files pane without crashing.
 	favorites FavoritesService
 
+	// themes is the browser's theme catalog for the shared theme-selector
+	// popup (T). nil makes T a silent no-op, matching the favorites/
+	// gitCache nilability convention. activeThemeName positions the
+	// selector's cursor on open; noColors mirrors Model's --no-colors
+	// override (a theme choice never re-enables color once disabled).
+	// themePreview is non-nil only while the popup is open, holding the
+	// resolver to restore on cancel — the browser screen has no
+	// renderer/SGR/chroma-highlighted diff to save, unlike the review
+	// screen's themePreviewSession, so it needs nothing else.
+	themes          ThemeCatalog
+	activeThemeName string
+	noColors        bool
+	themePreview    *browserThemePreview
+
 	// hint is a transient status-bar message (e.g. "added to favorites"),
 	// cleared at the top of the next handleKey call — mirrors the review
 	// screen's reload.hint/output.hint/compact.hint pattern of a one-render
@@ -591,6 +620,8 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.toggleFavorite()
 	case keymap.ActionBrowserFavorites:
 		b.openFavorites()
+	case keymap.ActionBrowserThemeSelect:
+		b.openThemeSelector()
 	default:
 		// browser_review, browser_quit, and browser_enter's changed-file
 		// case are all intercepted by RootModel before this is reached:
@@ -614,6 +645,12 @@ func (b browserScreen) handleBrowserOverlayKey(msg tea.KeyMsg) (tea.Model, tea.C
 		return b, b.navChanged(b.nav.GoTo(out.FavoritePath))
 	case overlay.OutcomeFavoriteDeleteRequested:
 		b.removeFavorite(out.FavoritePath)
+	case overlay.OutcomeThemePreview:
+		b.previewTheme(out.ThemeChoice.Name)
+	case overlay.OutcomeThemeConfirmed:
+		b.confirmTheme(out.ThemeChoice.Name)
+	case overlay.OutcomeThemeCanceled:
+		b.cancelThemeSelect()
 	}
 
 	return b, nil
