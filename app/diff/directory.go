@@ -13,16 +13,16 @@ import (
 
 // DirectoryReader is a Renderer that lists all tracked files and reads them as context lines.
 // used for --all-files mode where every tracked file is browsable, not just changed files.
-// the file-listing strategy is pluggable so git, jj, or any future VCS can plug in.
+// the file-listing strategy is pluggable so a future VCS can plug in without a new Renderer type.
 type DirectoryReader struct {
 	workDir    string
-	listSource string // human label used in error messages ("git ls-files", "jj file list")
+	listSource string // human label used in error messages ("git ls-files")
 	listFiles  func() ([]byte, error)
 	splitSep   byte // separator between entries in the listFiles output (NUL or newline)
 }
 
 // NewDirectoryReader creates a DirectoryReader backed by `git ls-files`.
-// The directory must be inside a git repository. Use NewJjDirectoryReader for jj repos.
+// The directory must be inside a git repository.
 func NewDirectoryReader(workDir string) *DirectoryReader {
 	dr := &DirectoryReader{
 		workDir:    workDir,
@@ -32,23 +32,6 @@ func NewDirectoryReader(workDir string) *DirectoryReader {
 	dr.listFiles = func() ([]byte, error) {
 		// use -z for NUL-separated output to avoid C-quoting of paths with non-ASCII characters
 		cmd := exec.CommandContext(context.Background(), "git", "ls-files", "-z")
-		cmd.Dir = workDir
-		return cmd.Output()
-	}
-	return dr
-}
-
-// NewJjDirectoryReader creates a DirectoryReader backed by `jj file list`.
-// jj file list emits one path per line (no -z / NUL mode), and jj auto-tracks
-// every file in the working copy so its output is equivalent to git ls-files.
-func NewJjDirectoryReader(workDir string) *DirectoryReader {
-	dr := &DirectoryReader{
-		workDir:    workDir,
-		listSource: "jj file list",
-		splitSep:   '\n',
-	}
-	dr.listFiles = func() ([]byte, error) {
-		cmd := exec.CommandContext(context.Background(), "jj", "file", "list")
 		cmd.Dir = workDir
 		return cmd.Output()
 	}

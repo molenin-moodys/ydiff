@@ -39,7 +39,7 @@ type options struct {
 	ExitCodeOnAnnotations bool     `long:"exit-code-on-annotations" ini-name:"exit-code-on-annotations" env:"REVDIFF_EXIT_CODE_ON_ANNOTATIONS" description:"exit 10 when annotations are produced"`
 	VimMotion             bool     `long:"vim-motion" ini-name:"vim-motion" env:"REVDIFF_VIM_MOTION" description:"enable vim-style motion preset (counts, gg, G, zz/zt/zb, ZZ/ZQ)"`
 	ChromaStyle           string   `long:"chroma-style" ini-name:"chroma-style" env:"REVDIFF_CHROMA_STYLE" default:"catppuccin-macchiato" description:"chroma style for syntax highlighting"`
-	AllFiles              bool     `long:"all-files" short:"A" no-ini:"true" description:"browse all tracked files, not just diffs (git and jj only)"`
+	AllFiles              bool     `long:"all-files" short:"A" no-ini:"true" description:"browse all tracked files, not just diffs (git only)"`
 	CompareOld            string   `long:"compare-old" no-ini:"true" description:"compare mode: old file path (use with --compare-new)"`
 	CompareNew            string   `long:"compare-new" no-ini:"true" description:"compare mode: new file path (use with --compare-old)"`
 	Stdin                 bool     `long:"stdin" no-ini:"true" description:"review stdin as a scratch buffer"`

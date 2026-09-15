@@ -28,12 +28,12 @@ func TestReviewInfoFromOptions(t *testing.T) {
 	})
 
 	t.Run("VCS string is propagated", func(t *testing.T) {
-		info := reviewInfoFromOptions(options{}, reviewInfoInputs{workDir: "/repo", vcsType: diff.VCSJJ})
-		assert.Equal(t, string(diff.VCSJJ), info.VCS)
+		info := reviewInfoFromOptions(options{}, reviewInfoInputs{workDir: "/repo", vcsType: diff.VCSGit})
+		assert.Equal(t, string(diff.VCSGit), info.VCS)
 	})
 
-	t.Run("staged is ignored for VCSes without staging area", func(t *testing.T) {
-		info := reviewInfoFromOptions(options{Staged: true}, reviewInfoInputs{workDir: "/repo", vcsType: diff.VCSHg})
+	t.Run("staged is ignored outside a git repository", func(t *testing.T) {
+		info := reviewInfoFromOptions(options{Staged: true}, reviewInfoInputs{workDir: "/repo", vcsType: diff.VCSNone})
 		assert.False(t, info.Staged)
 	})
 

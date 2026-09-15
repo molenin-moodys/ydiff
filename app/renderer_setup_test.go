@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestMakeNoVCSRenderer_NoOnly(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, renderer)
 	assert.Empty(t, workDir)
-	assert.Contains(t, err.Error(), "no git, mercurial, or jujutsu repository found")
+	assert.Contains(t, err.Error(), "no git repository found")
 }
 
 func TestMakeGitRenderer_AllFiles(t *testing.T) {
@@ -59,42 +60,6 @@ func TestMakeGitRenderer_AllFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, renderer)
 	assert.IsType(t, &diff.DirectoryReader{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeHgRenderer_AllFilesUnsupported(t *testing.T) {
-	_, _, err := makeHgRenderer(diff.NewHg(""), options{AllFiles: true}, "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--all-files is not supported in mercurial")
-}
-
-func TestMakeHgRenderer_Default(t *testing.T) {
-	dir := t.TempDir()
-	h := diff.NewHg(dir)
-	renderer, workDir, err := makeHgRenderer(h, options{}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.Hg{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeHgRenderer_WithOnly(t *testing.T) {
-	dir := t.TempDir()
-	h := diff.NewHg(dir)
-	renderer, workDir, err := makeHgRenderer(h, options{Only: []string{"file.go"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.FallbackRenderer{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeHgRenderer_WithExclude(t *testing.T) {
-	dir := t.TempDir()
-	h := diff.NewHg(dir)
-	renderer, workDir, err := makeHgRenderer(h, options{Exclude: []string{"vendor"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.ExcludeFilter{}, renderer)
 	assert.Equal(t, dir, workDir)
 }
 
@@ -123,66 +88,6 @@ func TestMakeGitRenderer_WithInclude(t *testing.T) {
 	dir := t.TempDir()
 	g := diff.NewGit(dir)
 	renderer, workDir, err := makeGitRenderer(g, options{Include: []string{"src"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.IncludeFilter{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeHgRenderer_WithInclude(t *testing.T) {
-	dir := t.TempDir()
-	h := diff.NewHg(dir)
-	renderer, workDir, err := makeHgRenderer(h, options{Include: []string{"src"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.IncludeFilter{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeJjRenderer_Default(t *testing.T) {
-	dir := t.TempDir()
-	j := diff.NewJj(dir)
-	renderer, workDir, err := makeJjRenderer(j, options{}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.Jj{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeJjRenderer_WithOnly(t *testing.T) {
-	dir := t.TempDir()
-	j := diff.NewJj(dir)
-	renderer, workDir, err := makeJjRenderer(j, options{Only: []string{"file.go"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.FallbackRenderer{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeJjRenderer_AllFiles(t *testing.T) {
-	dir := t.TempDir()
-	j := diff.NewJj(dir)
-	renderer, workDir, err := makeJjRenderer(j, options{AllFiles: true}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.DirectoryReader{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeJjRenderer_WithExclude(t *testing.T) {
-	dir := t.TempDir()
-	j := diff.NewJj(dir)
-	renderer, workDir, err := makeJjRenderer(j, options{Exclude: []string{"vendor"}}, dir)
-	require.NoError(t, err)
-	require.NotNil(t, renderer)
-	assert.IsType(t, &diff.ExcludeFilter{}, renderer)
-	assert.Equal(t, dir, workDir)
-}
-
-func TestMakeJjRenderer_WithInclude(t *testing.T) {
-	dir := t.TempDir()
-	j := diff.NewJj(dir)
-	renderer, workDir, err := makeJjRenderer(j, options{Include: []string{"src"}}, dir)
 	require.NoError(t, err)
 	require.NotNil(t, renderer)
 	assert.IsType(t, &diff.IncludeFilter{}, renderer)
@@ -221,7 +126,7 @@ func TestIncludeExcludeComposition(t *testing.T) {
 }
 
 func TestDetectVCS_Git(t *testing.T) {
-	// this test runs from inside the revdiff repo (which is a git repo)
+	// this test runs from inside the ydiff repo (which is a git repo)
 	vcsType, root := diff.DetectVCS(".")
 	assert.Equal(t, diff.VCSGit, vcsType)
 	assert.DirExists(t, root)
@@ -233,6 +138,33 @@ func TestDetectVCS_None(t *testing.T) {
 	vcsType, root := diff.DetectVCS(".")
 	assert.Equal(t, diff.VCSNone, vcsType)
 	assert.Empty(t, root)
+}
+
+// TestSetupVCSRenderer_ResolvesRealGitRepo verifies the VCS interface resolves a
+// real repository created with `git init` (not merely a directory carrying a
+// bare ".git" stand-in) and wires up the git renderer end to end.
+func TestSetupVCSRenderer_ResolvesRealGitRepo(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "--quiet", dir)
+	require.NoError(t, cmd.Run())
+	t.Chdir(dir)
+
+	setup, err := setupVCSRenderer(options{})
+	require.NoError(t, err)
+	assert.Equal(t, diff.VCSGit, setup.vcsType)
+	assert.IsType(t, &diff.Git{}, setup.renderer)
+	assert.NotEmpty(t, setup.gitRoot)
+}
+
+// TestSetupVCSRenderer_NoVCSReportsClearError verifies that outside any VCS,
+// and without --only to fall back to standalone file review, setupVCSRenderer
+// reports a clear, distinguishable error rather than silently degrading.
+func TestSetupVCSRenderer_NoVCSReportsClearError(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	_, err := setupVCSRenderer(options{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no git repository found")
 }
 
 func TestCommitsApplicable(t *testing.T) {
@@ -263,8 +195,6 @@ func TestCommitsApplicable(t *testing.T) {
 func TestCompactApplicable(t *testing.T) {
 	dir := t.TempDir()
 	g := diff.NewGit(dir)
-	h := diff.NewHg(dir)
-	j := diff.NewJj(dir)
 	fr := diff.NewFileReader([]string{"file.md"}, dir)
 	fallback := diff.NewFallbackRenderer(g, []string{"file.md"}, dir)
 	incl := diff.NewIncludeFilter(g, []string{"src"})
@@ -278,8 +208,6 @@ func TestCompactApplicable(t *testing.T) {
 		want     bool
 	}{
 		{name: "plain git ref", opts: options{}, renderer: g, want: true},
-		{name: "plain hg", opts: options{}, renderer: h, want: true},
-		{name: "plain jj", opts: options{}, renderer: j, want: true},
 		{name: "stdin disqualifies", opts: options{Stdin: true}, renderer: g, want: false},
 		{name: "all-files disqualifies", opts: options{AllFiles: true}, renderer: g, want: false},
 		{name: "only without VCS (FileReader)", opts: options{Only: []string{"file.md"}}, renderer: fr, want: false},
@@ -297,10 +225,8 @@ func TestCompactApplicable(t *testing.T) {
 	}
 }
 
-func TestGitHgJj_ImplementCommitLogger(t *testing.T) {
+func TestGit_ImplementsCommitLogger(t *testing.T) {
 	assert.Implements(t, (*diff.CommitLogger)(nil), diff.NewGit(t.TempDir()))
-	assert.Implements(t, (*diff.CommitLogger)(nil), diff.NewHg(t.TempDir()))
-	assert.Implements(t, (*diff.CommitLogger)(nil), diff.NewJj(t.TempDir()))
 }
 
 func TestReloadApplicable(t *testing.T) {

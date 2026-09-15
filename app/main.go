@@ -359,9 +359,9 @@ func commitsApplicable(opts options, cl diff.CommitLogger) bool {
 // VCS diff via the compact toggle. false for stdin (no VCS), all-files (no
 // hunks to contextualize), and standalone file review via FileReader (pure
 // context-only source with no underlying VCS). All other renderer shapes —
-// *Git / *Hg / *Jj, with or without Fallback / Include / Exclude wrappers —
-// qualify because the wrapper chain delegates FileDiff straight through to
-// a VCS that honors contextLines.
+// *Git, with or without Fallback / Include / Exclude wrappers — qualify
+// because the wrapper chain delegates FileDiff straight through to a VCS
+// that honors contextLines.
 func compactApplicable(opts options, r ui.Renderer) bool {
 	if opts.Stdin || opts.AllFiles {
 		return false

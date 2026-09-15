@@ -288,18 +288,18 @@ default theme `revdiff` -> `ydiff`.
 - Delete: `app/diff/hg.go`, `app/diff/jj.go`, `app/diff/hgblame.go`, `app/diff/jjblame.go` and their tests, including `hg_e2e_test.go` and `jj_e2e_test.go`
 - Modify: `app/diff/vcs.go`, `app/diff/diff.go`, `app/diff/directory.go`, `app/renderer_setup.go`, `app/review/stats.go`, `app/ui/reviewinfo.go`, `app/config.go`
 
-- [ ] delete the hg and jj implementation and blame files with their tests
-- [ ] remove hg/jj branches from the **verified** reference sites above — note that
+- [x] delete the hg and jj implementation and blame files with their tests
+- [x] remove hg/jj branches from the **verified** reference sites above — note that
       `app/diff/blame.go` and `app/diff/compare.go` do *not* reference them, while
       `app/diff/directory.go`, `app/renderer_setup.go`, `app/review/stats.go` and
       `app/ui/reviewinfo.go` do
-- [ ] update the `--all-files` description at `app/config.go:42`, which reads
+- [x] update the `--all-files` description at `app/config.go:42`, which reads
       "(git and jj only)", and its gating logic
-- [ ] **keep** the VCS interface in `app/diff/vcs.go` with git as the sole implementation,
+- [x] **keep** the VCS interface in `app/diff/vcs.go` with git as the sole implementation,
       so adding Mercurial later is one new file rather than a layer rebuild
-- [ ] write a test asserting the interface resolves git repositories and reports a clear
+- [x] write a test asserting the interface resolves git repositories and reports a clear
       error for an unsupported VCS
-- [ ] run `go test ./...` — suite green before task 5
+- [x] run `go test ./...` — suite green before task 5
 
 ### Task 5: Remove the vim-motion preset
 

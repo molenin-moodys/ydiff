@@ -31,8 +31,8 @@ const (
 	fullContextSentinel = 1000000
 
 	// fullFileContext is the -U value treated as "give me the full file"; use
-	// unifiedContextArg (git/hg) or jjContextArg at call sites to choose
-	// between full-file and small-context based on the caller's contextLines value.
+	// unifiedContextArg at call sites to choose between full-file and
+	// small-context based on the caller's contextLines value.
 	fullFileContext = "-U1000000"
 
 	// MaxLineLength is the maximum line length (in bytes) that scanners will accept.
@@ -124,7 +124,7 @@ type CommitInfo struct {
 }
 
 // CommitLogger is an optional capability interface implemented by VCS renderers
-// (Git, Hg, Jj) that can enumerate commits in a ref range. It is deliberately
+// (currently only Git) that can enumerate commits in a ref range. It is deliberately
 // separate from Renderer so consumers type-assert for the capability and gracefully
 // fall back when unavailable (e.g. FileReader, DirectoryReader).
 //
@@ -141,7 +141,7 @@ type CommitLogger interface {
 // NUL-separated via -z. Subject and body are joined by a newline inside the
 // final field so the parser's SplitN naturally absorbs any control bytes
 // (including \x1f) that a crafted commit message might embed — splitCommitDesc
-// then separates subject and body on the first newline, matching hg/jj.
+// then separates subject and body on the first newline.
 const commitLogFormat = "%H%x1f%an <%ae>%x1f%cI%x1f%s%n%b"
 
 // ansiCSIRe matches complete ANSI CSI escape sequences (ESC [ ... final-byte).
@@ -656,7 +656,7 @@ func (g *Git) totalOldLines(req FileDiffRequest) int {
 	return countLines(out)
 }
 
-// unifiedContextArg returns the -U argument for unified-diff tools (git, hg)
+// unifiedContextArg returns the -U argument for git's unified-diff output
 // given the caller's requested context size. A non-positive contextLines or one
 // at or above fullContextSentinel returns the full-file arg; any other value
 // returns -U<contextLines>.

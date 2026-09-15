@@ -10,16 +10,16 @@ type VCSType string
 
 const (
 	VCSGit  VCSType = "git"
-	VCSHg   VCSType = "hg"
-	VCSJJ   VCSType = "jj"
 	VCSNone VCSType = ""
 )
 
-// DetectVCS walks up from startDir looking for .jj, .git, or .hg directories.
+// DetectVCS walks up from startDir looking for a .git entry.
 // returns the VCS type and repo root path. If no VCS is found, returns VCSNone and empty string.
-// precedence (checked in order at each directory): jj, git, hg. Jujutsu is commonly
-// colocated with a .git directory; in that case jj wins so operations target the jj
-// working-copy model rather than bypassing it through git.
+//
+// Git is the sole supported VCS; the VCSType/DetectVCS abstraction is kept separate from the
+// rest of the codebase (rather than hardcoding "git" at every call site) so that adding another
+// VCS back later is a matter of extending this function and adding a new Renderer implementation,
+// not reworking the callers.
 func DetectVCS(startDir string) (VCSType, string) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
@@ -27,16 +27,9 @@ func DetectVCS(startDir string) (VCSType, string) {
 	}
 
 	for {
-		// check .jj first — jj often colocates with .git; jj wins so we don't bypass the jj model
-		if info, err := os.Stat(filepath.Join(dir, ".jj")); err == nil && info.IsDir() {
-			return VCSJJ, dir
-		}
 		// .git can be a file in worktrees/submodules
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return VCSGit, dir
-		}
-		if info, err := os.Stat(filepath.Join(dir, ".hg")); err == nil && info.IsDir() {
-			return VCSHg, dir
 		}
 
 		parent := filepath.Dir(dir)

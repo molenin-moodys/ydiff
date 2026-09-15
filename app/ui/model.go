@@ -111,8 +111,8 @@ type overlayManager interface {
 }
 
 // commitLogSource is what Model needs to enumerate commits in the current ref range
-// for the info popup's commit-log section. Implemented by diff.Git, diff.Hg, and
-// diff.Jj via the diff.CommitLogger capability interface; nil means the section
+// for the info popup's commit-log section. Implemented by diff.Git via the
+// diff.CommitLogger capability interface; nil means the section
 // is unavailable (e.g. stdin mode, FileReader, DirectoryReader, or any wrapper
 // that hides the underlying VCS). Defined on the consumer side per Go convention.
 type commitLogSource interface {

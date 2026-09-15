@@ -2,6 +2,7 @@ package diff
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -19,58 +20,28 @@ func TestDetectVCS_Git(t *testing.T) {
 	assert.Equal(t, dir, root)
 }
 
-func TestDetectVCS_Hg(t *testing.T) {
+// TestDetectVCS_RealGitInit resolves a repository created with the actual `git init`
+// binary, rather than a bare ".git" directory stand-in, so the positive case is
+// verified against a real repository as the VCS interface will encounter in practice.
+func TestDetectVCS_RealGitInit(t *testing.T) {
 	dir := t.TempDir()
-	err := os.Mkdir(filepath.Join(dir, ".hg"), 0o750)
-	require.NoError(t, err)
-
-	vcs, root := DetectVCS(dir)
-	assert.Equal(t, VCSHg, vcs)
-	assert.Equal(t, dir, root)
-}
-
-func TestDetectVCS_Jj(t *testing.T) {
-	dir := t.TempDir()
-	err := os.Mkdir(filepath.Join(dir, ".jj"), 0o750)
-	require.NoError(t, err)
-
-	vcs, root := DetectVCS(dir)
-	assert.Equal(t, VCSJJ, vcs)
-	assert.Equal(t, dir, root)
-}
-
-func TestDetectVCS_GitTakesPrecedenceOverHg(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o750))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".hg"), 0o750))
+	cmd := exec.Command("git", "init", "--quiet", dir)
+	require.NoError(t, cmd.Run())
 
 	vcs, root := DetectVCS(dir)
 	assert.Equal(t, VCSGit, vcs)
 	assert.Equal(t, dir, root)
 }
 
-// TestDetectVCS_JjTakesPrecedenceOverGit covers colocated jj+git repos.
-// Jujutsu often coexists with .git (colocated mode); treat it as jj to avoid
-// jj-unsafe git diff operations and to surface the actual working-copy model.
-func TestDetectVCS_JjTakesPrecedenceOverGit(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".jj"), 0o750))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o750))
-
-	vcs, root := DetectVCS(dir)
-	assert.Equal(t, VCSJJ, vcs)
-	assert.Equal(t, dir, root)
-}
-
 func TestDetectVCS_WalksUp(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".hg"), 0o750))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o750))
 
 	sub := filepath.Join(dir, "deep", "nested")
 	require.NoError(t, os.MkdirAll(sub, 0o750))
 
 	vcs, root := DetectVCS(sub)
-	assert.Equal(t, VCSHg, vcs)
+	assert.Equal(t, VCSGit, vcs)
 	assert.Equal(t, dir, root)
 }
 
@@ -85,6 +56,10 @@ func TestDetectVCS_GitWorktree(t *testing.T) {
 	assert.Equal(t, dir, root)
 }
 
+// TestDetectVCS_None covers the unsupported/absent VCS case: a directory with no
+// .git anywhere up its tree resolves as VCSNone with an empty root, which is the
+// distinguishable "no VCS here" signal that setupVCSRenderer turns into a clear
+// error (see TestSetupVCSRenderer_NoVCSReportsClearError in renderer_setup_test.go).
 func TestDetectVCS_None(t *testing.T) {
 	dir := t.TempDir()
 	vcs, root := DetectVCS(dir)

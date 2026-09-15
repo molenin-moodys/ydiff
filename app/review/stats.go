@@ -96,9 +96,9 @@ func ComputeStats(req StatsRequest) Stats {
 	roots := workDirRoots{workDir: req.WorkDir, realWorkDir: resolveWorkDir(req.WorkDir)}
 	// contextLines=0 requests full-file context, which skips the per-file
 	// totalOldLines probe inside the VCS renderers — that probe fires a
-	// separate `git show <ref>:<file>` (or hg/jj equivalent) per file solely to
-	// emit the trailing divider, and stats only consumes diff.CountChanges so
-	// the divider would be discarded anyway.
+	// separate `git show <ref>:<file>` per file solely to emit the trailing
+	// divider, and stats only consumes diff.CountChanges so the divider would
+	// be discarded anyway.
 	for _, e := range req.Entries {
 		if e.Status == diff.FileUntracked {
 			lines, partial := readUntracked(roots, e.Path, stats.Partial)

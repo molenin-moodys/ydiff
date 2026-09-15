@@ -75,7 +75,7 @@ func (m *Model) triggerReviewStats() tea.Cmd {
 // package stays out of the diff-fetching / filesystem business.
 //
 // The normalized Staged value from the review-info config is used so
-// stats-loading honors the same hg/jj fallback as the popup header/footer.
+// stats-loading honors the same normalization as the popup header/footer.
 // Reading m.cfg.staged directly would diverge from what the user sees.
 func (m Model) loadReviewStats(entries []diff.FileEntry) tea.Cmd {
 	if m.review.cfg == nil || m.review.cfg.AllFiles || len(entries) == 0 {

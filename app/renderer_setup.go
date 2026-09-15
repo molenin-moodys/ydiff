@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/molenin-moodys/ydiff/app/diff"
@@ -36,26 +35,6 @@ func setupVCSRenderer(opts options) (vcsSetup, error) {
 			return vcsSetup{}, err
 		}
 		return vcsSetup{renderer: r, vcsType: diff.VCSGit, gitRoot: vcsRoot, workDir: workDir, blamer: g, untrackedFn: g.UntrackedFiles, untrackedRenamesFn: g.UntrackedRenames, commitLogger: g}, nil
-	case diff.VCSHg:
-		if opts.Staged {
-			fmt.Fprintln(os.Stderr, "warning: --staged ignored in mercurial repository (no staging area)")
-		}
-		h := diff.NewHg(vcsRoot)
-		r, workDir, err := makeHgRenderer(h, opts, vcsRoot)
-		if err != nil {
-			return vcsSetup{}, err
-		}
-		return vcsSetup{renderer: r, vcsType: diff.VCSHg, workDir: workDir, blamer: h, untrackedFn: h.UntrackedFiles, commitLogger: h}, nil
-	case diff.VCSJJ:
-		if opts.Staged {
-			fmt.Fprintln(os.Stderr, "warning: --staged ignored in jujutsu repository (no staging area)")
-		}
-		jj := diff.NewJj(vcsRoot)
-		r, workDir, err := makeJjRenderer(jj, opts, vcsRoot)
-		if err != nil {
-			return vcsSetup{}, err
-		}
-		return vcsSetup{renderer: r, vcsType: diff.VCSJJ, workDir: workDir, blamer: jj, untrackedFn: jj.UntrackedFiles, commitLogger: jj}, nil
 	default:
 		r, workDir, err := makeNoVCSRenderer(opts.Only, cwd)
 		if err != nil {
@@ -67,7 +46,7 @@ func setupVCSRenderer(opts options) (vcsSetup, error) {
 
 // makeGitRenderer selects the appropriate git renderer based on flags.
 // reuses the provided *Git instance as the default renderer to avoid double allocation.
-func makeGitRenderer(g *diff.Git, opts options, repoRoot string) (ui.Renderer, string, error) { //nolint:unparam // error kept for consistency with makeHgRenderer/makeNoVCSRenderer
+func makeGitRenderer(g *diff.Git, opts options, repoRoot string) (ui.Renderer, string, error) { //nolint:unparam // error kept for consistency with makeNoVCSRenderer
 	var r ui.Renderer
 	switch {
 	case opts.AllFiles:
@@ -76,36 +55,6 @@ func makeGitRenderer(g *diff.Git, opts options, repoRoot string) (ui.Renderer, s
 		r = diff.NewFallbackRenderer(g, opts.Only, repoRoot)
 	default:
 		r = g
-	}
-	return wrapFilters(r, opts), repoRoot, nil
-}
-
-// makeHgRenderer selects the appropriate mercurial renderer based on flags.
-// reuses the provided *Hg instance as the default renderer to avoid double allocation.
-func makeHgRenderer(h *diff.Hg, opts options, repoRoot string) (ui.Renderer, string, error) {
-	var r ui.Renderer
-	switch {
-	case opts.AllFiles:
-		return nil, "", errors.New("--all-files is not supported in mercurial repositories")
-	case len(opts.Only) > 0:
-		r = diff.NewFallbackRenderer(h, opts.Only, repoRoot)
-	default:
-		r = h
-	}
-	return wrapFilters(r, opts), repoRoot, nil
-}
-
-// makeJjRenderer selects the appropriate jujutsu renderer based on flags.
-// reuses the provided *Jj instance as the default renderer to avoid double allocation.
-func makeJjRenderer(j *diff.Jj, opts options, repoRoot string) (ui.Renderer, string, error) { //nolint:unparam // error kept for consistency with makeGitRenderer/makeHgRenderer
-	var r ui.Renderer
-	switch {
-	case opts.AllFiles:
-		r = diff.NewJjDirectoryReader(repoRoot)
-	case len(opts.Only) > 0:
-		r = diff.NewFallbackRenderer(j, opts.Only, repoRoot)
-	default:
-		r = j
 	}
 	return wrapFilters(r, opts), repoRoot, nil
 }
@@ -144,7 +93,7 @@ func filterUntracked(fn func() ([]string, error), include, exclude []string) fun
 // --exclude is a no-op here (FileReader only returns the --only files).
 func makeNoVCSRenderer(only []string, cwd string) (ui.Renderer, string, error) {
 	if len(only) == 0 {
-		return nil, "", errors.New("no git, mercurial, or jujutsu repository found (use --only to review standalone files)")
+		return nil, "", errors.New("no git repository found (use --only to review standalone files)")
 	}
 	return diff.NewFileReader(only, cwd), cwd, nil
 }
