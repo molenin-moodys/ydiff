@@ -70,6 +70,27 @@ const (
 	ActionOpenEditor       Action = "open_editor"
 	ActionOpenFileInEditor Action = "open_file_in_editor"
 	ActionFlushOutput      Action = "flush_output"
+
+	// browser action constants. These live in a separate binding namespace
+	// (Keymap.browserBindings) from the review-screen actions above, resolved
+	// through ResolveBrowser rather than Resolve. This lets a letter such as
+	// "d" or "t" mean one thing in the review screen (delete_annotation,
+	// toggle_tree) and something else entirely in the browser
+	// (browser_review, browser_toggle_scope) without either screen's default
+	// bindings colliding with the other's.
+	ActionBrowserUp           Action = "browser_up"
+	ActionBrowserDown         Action = "browser_down"
+	ActionBrowserEnter        Action = "browser_enter" // enter directory / open diff / apply filter
+	ActionBrowserUpLevel      Action = "browser_up_level"
+	ActionBrowserFilter       Action = "browser_filter"
+	ActionBrowserDismiss      Action = "browser_dismiss" // cancel filter / close overlay; never quits
+	ActionBrowserReview       Action = "browser_review"
+	ActionBrowserToggleScope  Action = "browser_toggle_scope"
+	ActionBrowserRefresh      Action = "browser_refresh"
+	ActionBrowserToggleHidden Action = "browser_toggle_hidden"
+	ActionBrowserFocusPane    Action = "browser_focus_pane"
+	ActionBrowserQuit         Action = "browser_quit"
+	ActionBrowserHelp         Action = "browser_help"
 )
 
 // SectionPane is the help section name for pane-related keybindings.
@@ -98,6 +119,24 @@ var validActions = map[Action]bool{
 	ActionFlushOutput:      true,
 }
 
+// validBrowserActions contains all known browser action names, kept separate
+// from validActions so isBrowserAction can route parsed "map" lines to the
+// correct binding namespace (browserBindings vs bindings).
+var validBrowserActions = map[Action]bool{
+	ActionBrowserUp: true, ActionBrowserDown: true, ActionBrowserEnter: true,
+	ActionBrowserUpLevel: true, ActionBrowserFilter: true, ActionBrowserDismiss: true,
+	ActionBrowserReview: true, ActionBrowserToggleScope: true, ActionBrowserRefresh: true,
+	ActionBrowserToggleHidden: true, ActionBrowserFocusPane: true,
+	ActionBrowserQuit: true, ActionBrowserHelp: true,
+}
+
+// isBrowserAction reports whether a is a browser action, as opposed to a
+// review-screen action. Used by Load to decide which of the two binding maps
+// a parsed "map" line's key/action pair belongs in.
+func isBrowserAction(a Action) bool {
+	return validBrowserActions[a]
+}
+
 // deprecatedActionAliases maps obsolete action names parsed from user
 // keybinding files onto their canonical replacement. The action was renamed
 // from "commit_info" to "info" when the popup expanded to cover description
@@ -114,7 +153,7 @@ var deprecatedActionAliases = map[Action]Action{
 // aliases also report true so the parser accepts them; resolveAction performs
 // the rewrite to the canonical name before storage.
 func IsValidAction(a Action) bool {
-	if validActions[a] {
+	if validActions[a] || validBrowserActions[a] {
 		return true
 	}
 	_, ok := deprecatedActionAliases[a]
@@ -126,7 +165,7 @@ func IsValidAction(a Action) bool {
 // known alias. Returns the canonical action plus a deprecated flag so callers
 // can surface a one-time warning to the user.
 func resolveAction(a Action) (canonical Action, deprecated, ok bool) {
-	if validActions[a] {
+	if validActions[a] || validBrowserActions[a] {
 		return a, false, true
 	}
 	if alias, found := deprecatedActionAliases[a]; found {
@@ -176,6 +215,7 @@ type HelpEntryWithKeys struct {
 // by bubbletea's tea.KeyMsg.String().
 type Keymap struct {
 	bindings         map[string]Action
+	browserBindings  map[string]Action   // separate namespace for browser actions; see ResolveBrowser
 	descriptions     []HelpEntry         // ordered list of action descriptions
 	chordPrefixCache map[string]struct{} // lazy cache of chord leader keys; nil = not yet built
 }
@@ -308,11 +348,35 @@ func defaultBindings() map[string]Action {
 	}
 }
 
+// defaultBrowserBindings returns the default key-to-action mapping for the
+// browser screen. Deliberately has no vim-style letter aliases (j/k/h/l) for
+// movement: arrows move the cursor, letters are commands. This mirrors the
+// design doc's "Key bindings" table for the browser.
+func defaultBrowserBindings() map[string]Action {
+	return map[string]Action{
+		"up":    ActionBrowserUp,
+		"down":  ActionBrowserDown,
+		"right": ActionBrowserEnter,
+		"enter": ActionBrowserEnter,
+		"left":  ActionBrowserUpLevel,
+		"/":     ActionBrowserFilter,
+		"esc":   ActionBrowserDismiss,
+		"d":     ActionBrowserReview,
+		"t":     ActionBrowserToggleScope,
+		"r":     ActionBrowserRefresh,
+		".":     ActionBrowserToggleHidden,
+		"tab":   ActionBrowserFocusPane,
+		"q":     ActionBrowserQuit,
+		"?":     ActionBrowserHelp,
+	}
+}
+
 // Default returns a Keymap with all default bindings.
 func Default() *Keymap {
 	return &Keymap{
-		bindings:     defaultBindings(),
-		descriptions: defaultDescriptions(),
+		bindings:        defaultBindings(),
+		browserBindings: defaultBrowserBindings(),
+		descriptions:    defaultDescriptions(),
 	}
 }
 
@@ -366,6 +430,47 @@ func (km *Keymap) ResolveChord(prefix, second string) Action {
 	return ""
 }
 
+// resolveBrowserKey looks up key in the browser binding namespace, applying
+// the same non-Latin layout fallback as Resolve. Returns empty Action if
+// unbound; does not implement the filter-mode literal-text rule (see
+// ResolveBrowser for that).
+func (km *Keymap) resolveBrowserKey(key string) Action {
+	if a, ok := km.browserBindings[key]; ok {
+		return a
+	}
+	if r, size := utf8.DecodeRuneInString(key); size == len(key) {
+		if alias, ok := layoutResolve(r); ok {
+			if a, ok := km.browserBindings[string(alias)]; ok {
+				return a
+			}
+		}
+	}
+	return ""
+}
+
+// ResolveBrowser returns the browser action bound to key. When filterActive
+// is false (plain navigation), every bound key resolves normally, including
+// letter commands such as "d" (browser_review) or "t" (browser_toggle_scope).
+//
+// When filterActive is true, the same letters are literal text being typed
+// into the filter box, not commands: only ActionBrowserEnter (apply the
+// filter and return to navigation) and ActionBrowserDismiss (cancel the
+// filter; never quits) still resolve as actions. Every other key — including
+// keys that are commands during navigation — returns the empty Action so the
+// caller treats it as literal filter input. This is the crux of the
+// `/`-prefixed filter design: without this split, typing "d" into the filter
+// would jump to the review screen instead of narrowing the file list.
+func (km *Keymap) ResolveBrowser(key string, filterActive bool) Action {
+	action := km.resolveBrowserKey(key)
+	if !filterActive {
+		return action
+	}
+	if action == ActionBrowserEnter || action == ActionBrowserDismiss {
+		return action
+	}
+	return ""
+}
+
 // KeysFor returns all keys bound to the given action, sorted alphabetically.
 func (km *Keymap) KeysFor(action Action) []string {
 	var keys []string
@@ -378,16 +483,44 @@ func (km *Keymap) KeysFor(action Action) []string {
 	return keys
 }
 
-// Bind maps a key to an action, overriding any previous binding for that key.
+// KeysForBrowser returns all keys bound to the given browser action, sorted
+// alphabetically. Mirrors KeysFor but looks in the browser binding namespace.
+func (km *Keymap) KeysForBrowser(action Action) []string {
+	var keys []string
+	for k, a := range km.browserBindings {
+		if a == action {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Bind maps a key to a review-screen action, overriding any previous binding
+// for that key. Use BindBrowser for browser actions.
 func (km *Keymap) Bind(key string, action Action) {
 	km.bindings[key] = action
 	km.chordPrefixCache = nil
 }
 
-// Unbind removes the binding for the given key. No-op if key is not bound.
+// Unbind removes the review-screen binding for the given key. No-op if key
+// is not bound. Use UnbindBrowser for browser actions.
 func (km *Keymap) Unbind(key string) {
 	delete(km.bindings, key)
 	km.chordPrefixCache = nil
+}
+
+// BindBrowser maps a key to a browser action, overriding any previous browser
+// binding for that key. Kept separate from Bind so a key such as "d" can be
+// bound to different actions in the two namespaces at once.
+func (km *Keymap) BindBrowser(key string, action Action) {
+	km.browserBindings[key] = action
+}
+
+// UnbindBrowser removes the browser binding for the given key. No-op if key
+// is not bound in the browser namespace.
+func (km *Keymap) UnbindBrowser(key string) {
+	delete(km.browserBindings, key)
 }
 
 // chordPrefixes returns the set of leader keys that have at least one chord binding.
@@ -642,11 +775,19 @@ func Load(path string) (*Keymap, error) {
 
 	km := Default()
 
-	// apply unmaps first, then maps (so "unmap q" + "map x quit" works)
+	// apply unmaps first, then maps (so "unmap q" + "map x quit" works).
+	// a key string carries no namespace tag, so an unmap is applied to both
+	// the review and browser binding maps; it is a no-op wherever the key
+	// was not bound.
 	for _, key := range unmaps {
 		km.Unbind(key)
+		km.UnbindBrowser(key)
 	}
 	for _, m := range maps {
+		if isBrowserAction(m.action) {
+			km.BindBrowser(m.key, m.action)
+			continue
+		}
 		km.Bind(m.key, m.action)
 	}
 

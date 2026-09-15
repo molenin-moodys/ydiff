@@ -483,14 +483,14 @@ reworking it to issue commands afterwards.*
 *Ordered first in phase 4: handlers in tasks 17-20 dispatch through these bindings, so
 registering them afterwards would mean reworking all three.*
 
-- [ ] write tests first for the browser action set: arrows, `/`, `d`, `t`, `r`, `.`, Tab,
+- [x] write tests first for the browser action set: arrows, `/`, `d`, `t`, `r`, `.`, Tab,
       `q`, `?`, Esc
-- [ ] register the browser actions alongside the review screen's so they are remappable
+- [x] register the browser actions alongside the review screen's so they are remappable
       through the same `map`/`unmap` keybindings file
-- [ ] write the separation test: the same letter is a command in navigation and literal text
+- [x] write the separation test: the same letter is a command in navigation and literal text
       once the filter is active
-- [ ] write a test asserting a user remap of a browser action takes effect
-- [ ] run `go test -race ./app/keymap/...` — must pass before task 17
+- [x] write a test asserting a user remap of a browser action takes effect
+- [x] run `go test -race ./app/keymap/...` — must pass before task 17
 
 ### Task 17: Root model and screen routing
 

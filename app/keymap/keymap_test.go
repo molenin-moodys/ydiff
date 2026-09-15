@@ -1194,6 +1194,179 @@ func TestDump_RoundTripsChords(t *testing.T) {
 	assert.Equal(t, km.bindings, rebuilt.bindings, "dump -> parse -> rebuild must preserve bindings exactly")
 }
 
+// browser action tests (Task 16: register browser actions in the keymap)
+
+func TestDefaultBrowser_allExpectedBindings(t *testing.T) {
+	km := Default()
+	tests := []struct {
+		key    string
+		action Action
+	}{
+		{"up", ActionBrowserUp}, {"down", ActionBrowserDown},
+		{"right", ActionBrowserEnter}, {"enter", ActionBrowserEnter},
+		{"left", ActionBrowserUpLevel},
+		{"/", ActionBrowserFilter},
+		{"esc", ActionBrowserDismiss},
+		{"d", ActionBrowserReview},
+		{"t", ActionBrowserToggleScope},
+		{"r", ActionBrowserRefresh},
+		{".", ActionBrowserToggleHidden},
+		{"tab", ActionBrowserFocusPane},
+		{"q", ActionBrowserQuit},
+		{"?", ActionBrowserHelp},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.action, km.ResolveBrowser(tt.key, false),
+			"browser key %q should map to %q", tt.key, tt.action)
+	}
+	assert.Len(t, km.browserBindings, len(tests), "browser keymap should have exactly %d bindings", len(tests))
+}
+
+func TestDefaultBrowser_noVimAliases(t *testing.T) {
+	// design rule: no vim movement aliases in the browser. Arrows move,
+	// letters are commands. j/k/h/l must not resolve to movement (or
+	// anything else) in the browser namespace, unlike the review screen
+	// where j/k/h/l are bound.
+	km := Default()
+	for _, key := range []string{"j", "k", "h", "l"} {
+		assert.Equal(t, Action(""), km.ResolveBrowser(key, false),
+			"browser must not bind vim movement key %q", key)
+	}
+}
+
+// TestResolveBrowser_SeparationTest is the crux of the `/`-prefixed filter
+// design: the same letter key is a COMMAND during plain navigation but
+// LITERAL TEXT once the filter is active. If this breaks, typing "d" while
+// filtering would jump to the diff instead of narrowing the file list.
+func TestResolveBrowser_SeparationTest(t *testing.T) {
+	km := Default()
+
+	t.Run("letters are commands during navigation", func(t *testing.T) {
+		assert.Equal(t, ActionBrowserReview, km.ResolveBrowser("d", false))
+		assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false))
+		assert.Equal(t, ActionBrowserRefresh, km.ResolveBrowser("r", false))
+		assert.Equal(t, ActionBrowserToggleHidden, km.ResolveBrowser(".", false))
+		assert.Equal(t, ActionBrowserQuit, km.ResolveBrowser("q", false))
+		assert.Equal(t, ActionBrowserHelp, km.ResolveBrowser("?", false))
+	})
+
+	t.Run("the same letters are literal text once the filter is active", func(t *testing.T) {
+		assert.Equal(t, Action(""), km.ResolveBrowser("d", true), "d must not be a command while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser("t", true), "t must not be a command while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser("r", true), "r must not be a command while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser(".", true), ". must not be a command while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser("q", true), "q must not quit while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser("?", true), "? must not open help while filtering")
+	})
+
+	t.Run("enter still applies the filter while active", func(t *testing.T) {
+		assert.Equal(t, ActionBrowserEnter, km.ResolveBrowser("enter", true))
+	})
+
+	t.Run("esc still cancels the filter while active", func(t *testing.T) {
+		assert.Equal(t, ActionBrowserDismiss, km.ResolveBrowser("esc", true))
+	})
+}
+
+func TestBrowserEsc_NeverQuits(t *testing.T) {
+	km := Default()
+	// esc must resolve to dismiss (cancel filter / close overlay), never quit,
+	// in both filter and navigation modes.
+	assert.Equal(t, ActionBrowserDismiss, km.ResolveBrowser("esc", false))
+	assert.Equal(t, ActionBrowserDismiss, km.ResolveBrowser("esc", true))
+	assert.NotEqual(t, ActionBrowserQuit, km.ResolveBrowser("esc", false))
+
+	// quit is reachable only through "q", never through esc.
+	keys := km.KeysForBrowser(ActionBrowserQuit)
+	assert.Equal(t, []string{"q"}, keys, "browser quit must be bound only to q, never esc")
+}
+
+func TestBrowserActions_RegisteredAlongsideReviewActions(t *testing.T) {
+	// the browser and review actions live in separate namespaces within the
+	// same Keymap, resolved by ResolveBrowser and Resolve respectively, so
+	// the letter "d" means something different (but coexisting) in each.
+	km := Default()
+	assert.Equal(t, ActionDeleteAnnotation, km.Resolve("d"), "review 'd' is unaffected by the browser registration")
+	assert.Equal(t, ActionBrowserReview, km.ResolveBrowser("d", false), "browser 'd' opens the review screen")
+
+	assert.Equal(t, ActionToggleTree, km.Resolve("t"), "review 't' is unaffected by the browser registration")
+	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false), "browser 't' toggles scope")
+
+	assert.Equal(t, ActionToggleHunk, km.Resolve("."), "review '.' is unaffected by the browser registration")
+	assert.Equal(t, ActionBrowserToggleHidden, km.ResolveBrowser(".", false), "browser '.' toggles hidden files")
+}
+
+func TestIsValidAction_browserActions(t *testing.T) {
+	assert.True(t, IsValidAction(ActionBrowserReview))
+	assert.True(t, IsValidAction(ActionBrowserToggleScope))
+	assert.True(t, IsValidAction(ActionBrowserRefresh))
+	assert.True(t, IsValidAction(ActionBrowserToggleHidden))
+	assert.True(t, IsValidAction(ActionBrowserFocusPane))
+	assert.True(t, IsValidAction(ActionBrowserQuit))
+	assert.True(t, IsValidAction(ActionBrowserHelp))
+	assert.True(t, IsValidAction(ActionBrowserFilter))
+	assert.True(t, IsValidAction(ActionBrowserDismiss))
+	assert.True(t, IsValidAction(ActionBrowserEnter))
+	assert.True(t, IsValidAction(ActionBrowserUpLevel))
+	assert.True(t, IsValidAction(ActionBrowserUp))
+	assert.True(t, IsValidAction(ActionBrowserDown))
+}
+
+func TestBindBrowser_and_UnbindBrowser(t *testing.T) {
+	km := Default()
+	km.BindBrowser("x", ActionBrowserQuit)
+	assert.Equal(t, ActionBrowserQuit, km.ResolveBrowser("x", false))
+	// original binding still works (additive)
+	assert.Equal(t, ActionBrowserQuit, km.ResolveBrowser("q", false))
+	// review namespace is untouched by a browser bind
+	assert.Equal(t, Action(""), km.Resolve("x"))
+
+	km.UnbindBrowser("q")
+	assert.Equal(t, Action(""), km.ResolveBrowser("q", false))
+	assert.Equal(t, ActionBrowserQuit, km.ResolveBrowser("x", false), "unrelated browser binding unaffected")
+}
+
+// TestLoad_customBrowserBindingOverridesDefault mirrors
+// TestLoad_customBindingOverridesDefault for the browser namespace: a "map"
+// line for a key that already carries a default browser binding must replace
+// that default, and a keybindings file must be able to rebind a browser
+// action exactly as it rebinds a review action.
+func TestLoad_customBrowserBindingOverridesDefault(t *testing.T) {
+	require.Equal(t, ActionBrowserReview, Default().ResolveBrowser("d", false), "precondition: d defaults to browser_review")
+
+	tmpFile := t.TempDir() + "/keybindings"
+	err := os.WriteFile(tmpFile, []byte("map d browser_toggle_scope\n"), 0o600)
+	require.NoError(t, err)
+
+	km, err := Load(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("d", false), "custom binding must override the default browser action for d")
+	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false), "unrelated default browser bindings must be unaffected")
+	// review namespace is untouched by a remap of a browser action
+	assert.Equal(t, ActionDeleteAnnotation, km.Resolve("d"), "review binding for d must be unaffected by a browser remap")
+}
+
+func TestLoad_unmapAppliesToBothNamespaces(t *testing.T) {
+	// "unmap q" has no namespace tag, so it must clear the key from both the
+	// review and browser binding maps.
+	tmpFile := t.TempDir() + "/keybindings"
+	err := os.WriteFile(tmpFile, []byte("unmap q\n"), 0o600)
+	require.NoError(t, err)
+
+	km, err := Load(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, Action(""), km.Resolve("q"), "review binding for q must be cleared")
+	assert.Equal(t, Action(""), km.ResolveBrowser("q", false), "browser binding for q must be cleared")
+}
+
+func TestParse_acceptsBrowserActionNames(t *testing.T) {
+	maps, _, err := parse(strings.NewReader("map x browser_review\n"))
+	require.NoError(t, err)
+	require.Len(t, maps, 1)
+	assert.Equal(t, "x", maps[0].key)
+	assert.Equal(t, ActionBrowserReview, maps[0].action)
+}
+
 func TestKeysFor_IncludesChordKeys(t *testing.T) {
 	km := Default()
 	km.Bind("ctrl+w>x", ActionQuit)
