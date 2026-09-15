@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -177,15 +178,36 @@ func TestBrowserScreen_ResizeDividerTo_NoRoomIsNoOp(t *testing.T) {
 	b := browserScreen{width: 100, height: 40, widths: [3]int{1, 1, 1000}}
 	available := max(b.width-6, 0)
 	cells := distributeWidths(available, []int{1, 1, 1000})
-	if cells[0]+cells[1] >= 2*minColumnWidth {
-		t.Skipf("fixture no longer produces a starved pair: cells=%v", cells)
-	}
+	require.Less(t, cells[0]+cells[1], 2*minColumnWidth,
+		"fixture must produce a starved pair for divider 0; cells=%v", cells)
 	before := b.widths
 	if b.resizeDividerTo(0, 50) {
 		t.Fatal("resizeDividerTo reported a change with no room to give")
 	}
 	if b.widths != before {
 		t.Fatalf("widths mutated despite reporting no change: %v -> %v", before, b.widths)
+	}
+}
+
+// TestBrowserScreen_ResizeDividerTo_NeverWritesZero verifies that dragging
+// the *other* wide-tier divider of a starved-adjacent-column fixture never
+// leaves the untouched third cell at 0: distributeWidths({1,1,1000}) yields
+// cells=[0 0 94], and dragging divider 1 (whose pair, cells[1]+cells[2], has
+// plenty of room) previously copied cells[0] == 0 straight into b.widths[0].
+// A persisted 0 makes parseBrowserWidths reject the config file on the next
+// launch (see config.go's --browser-widths validation), so this is a
+// regression test for the fix, not just a snapshot of current behavior.
+func TestBrowserScreen_ResizeDividerTo_NeverWritesZero(t *testing.T) {
+	b := browserScreen{width: 100, height: 40, widths: [3]int{1, 1, 1000}}
+	available := max(b.width-6, 0)
+	cells := distributeWidths(available, []int{1, 1, 1000})
+	require.Equal(t, 0, cells[0], "fixture must produce a zero-width parent cell")
+	require.GreaterOrEqual(t, cells[1]+cells[2], 2*minColumnWidth,
+		"divider 1's pair must have room so the drag is not rejected outright")
+
+	require.True(t, b.resizeDividerTo(1, 50))
+	for i, w := range b.widths {
+		assert.GreaterOrEqualf(t, w, 1, "widths[%d] must never be 0 (would fail parseBrowserWidths on reload): %v", i, b.widths)
 	}
 }
 
@@ -395,4 +417,85 @@ func TestBrowserMouse_ReleaseWithoutDrag_DoesNotPersist(t *testing.T) {
 func TestBrowserScreen_PersistWidthsCmd_NilPersisterIsSafe(t *testing.T) {
 	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
 	assert.Nil(t, b.persistWidthsCmd())
+}
+
+// TestBrowserMouse_PressReleaseNoMotion_DoesNotPersist verifies a bare press
+// and release on a divider, with no motion in between, never issues a
+// persist command — an accidental click on a column border must not rewrite
+// the config file.
+func TestBrowserMouse_PressReleaseNoMotion_DoesNotPersist(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+	persister := &fakeWidthsPersister{}
+	root = root.WithBrowserWidthsPersister(persister)
+
+	ph := root.browser.paneContentHeight()
+	before := root.browser.effectiveWidths()
+	available := max(root.browser.width-6, 0)
+	cells := distributeWidths(available, []int{before[0], before[1], before[2]})
+	div0X := cells[0] + 1
+
+	updated, cmd := root.Update(leftClick(div0X, ph/2+1))
+	root = updated.(RootModel)
+	assert.Nil(t, cmd)
+	require.True(t, root.browser.drag.active)
+	assert.False(t, root.browser.drag.changed)
+
+	updated, cmd = root.Update(mouseRelease(div0X, ph/2+1))
+	root = updated.(RootModel)
+	assert.Nil(t, cmd, "a release with no intervening motion must not persist")
+	assert.False(t, root.browser.drag.active)
+	assert.Empty(t, persister.calls)
+}
+
+// TestBrowserMouse_ReleaseReportedAsButtonNone_EndsDrag verifies a release
+// event reported with Button: MouseButtonNone (the X10 fallback encoding a
+// terminal without SGR extended mouse mode uses) still ends an in-progress
+// drag, rather than leaving it stuck active for later motion to abuse.
+func TestBrowserMouse_ReleaseReportedAsButtonNone_EndsDrag(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+
+	ph := root.browser.paneContentHeight()
+	available := max(root.browser.width-6, 0)
+	cells := distributeWidths(available, []int{root.browser.effectiveWidths()[0], root.browser.effectiveWidths()[1], root.browser.effectiveWidths()[2]})
+	div0X := cells[0] + 1
+
+	updated, _ := root.Update(leftClick(div0X, ph/2+1))
+	root = updated.(RootModel)
+	require.True(t, root.browser.drag.active)
+
+	updated, _ = root.Update(tea.MouseMsg{X: div0X, Y: ph/2 + 1, Button: tea.MouseButtonNone, Action: tea.MouseActionRelease})
+	root = updated.(RootModel)
+	assert.False(t, root.browser.drag.active, "a MouseButtonNone release must still end the drag")
+}
+
+// TestBrowserScreen_Update_WindowSizeMsgMidDrag_ClearsDrag verifies a
+// tea.WindowSizeMsg arriving mid-drag abandons the drag rather than leaving
+// it active against now-stale geometry.
+func TestBrowserScreen_Update_WindowSizeMsgMidDrag_ClearsDrag(t *testing.T) {
+	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
+	b.drag = browserDrag{active: true, divider: 0, changed: true}
+
+	updated, _ := b.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	got := updated.(browserScreen)
+	assert.False(t, got.drag.active, "a resize mid-drag must abandon the drag")
+}
+
+// TestBrowserScreen_PersistWidthsCmd_PersisterErrorIsSwallowed verifies a
+// failing persister never panics and the returned tea.Msg is nil (the
+// caller-visible contract: a broken config write must never surface as a
+// tea.Msg the Update loop has to react to).
+func TestBrowserScreen_PersistWidthsCmd_PersisterErrorIsSwallowed(t *testing.T) {
+	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
+	b.persist = &fakeWidthsPersister{err: fmt.Errorf("boom")}
+
+	cmd := b.persistWidthsCmd()
+	require.NotNil(t, cmd)
+	assert.NotPanics(t, func() {
+		msg := cmd()
+		assert.Nil(t, msg)
+	})
 }

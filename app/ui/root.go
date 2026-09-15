@@ -366,11 +366,16 @@ type browserScreen struct {
 }
 
 // browserDrag is the in-progress state of a divider drag: which divider (if
-// any) is currently being dragged. active is false between drags; divider is
-// only meaningful while active is true.
+// any) is currently being dragged. active is false between drags; divider
+// and changed are only meaningful while active is true. changed tracks
+// whether any motion event during this drag actually moved b.widths (per
+// resizeDividerTo's bool return), so a bare press-and-release with no
+// intervening motion — or motion clamped back to the same widths — does not
+// issue a config-file write on release.
 type browserDrag struct {
 	active  bool
 	divider int
+	changed bool
 }
 
 // BrowserWidthsPersister is the consumer-side interface app/ui declares for

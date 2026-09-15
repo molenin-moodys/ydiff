@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,27 +36,36 @@ func TestConfigStore_PersistBrowserWidths_replacesExisting(t *testing.T) {
 	assert.Contains(t, string(data), "wrap = true")
 }
 
-func TestConfigStore_PersistBrowserWidths_roundTripsThroughParseBrowserWidths(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config")
-	cs := &configStore{path: path}
-	want := [3]int{12, 40, 48}
-	require.NoError(t, cs.PersistBrowserWidths(want))
+// TestConfigStore_PersistBrowserWidths_roundTripsThroughParseArgs verifies the
+// feature's actual premise (plan: "a browser-widths line written into the
+// config file survives p.ParseArgs") end to end through go-flags itself,
+// not just by feeding the raw substring to parseBrowserWidths — mirroring
+// TestPatchConfigTheme_testdataRoundTrip's precedent for the "theme" key.
+// Exercises both the headerless insert path (no config file yet) and the
+// replace-existing path.
+func TestConfigStore_PersistBrowserWidths_roundTripsThroughParseArgs(t *testing.T) {
+	t.Run("insert into a fresh config file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config")
+		cs := &configStore{path: path}
+		want := [3]int{12, 40, 48}
+		require.NoError(t, cs.PersistBrowserWidths(want))
 
-	data, err := os.ReadFile(path) //nolint:gosec // test
-	require.NoError(t, err)
+		opts, err := parseArgs([]string{"--config", path})
+		require.NoError(t, err, "patched file must parse without a go-flags error")
+		assert.Equal(t, want, opts.ResolvedBrowserWidths())
+	})
 
-	const prefix = "browser-widths = "
-	s := string(data)
-	idx := strings.Index(s, prefix)
-	require.GreaterOrEqual(t, idx, 0, "expected %q in %q", prefix, s)
-	value := s[idx+len(prefix):]
-	if nl := strings.IndexByte(value, '\n'); nl >= 0 {
-		value = value[:nl]
-	}
+	t.Run("replace an existing value", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config")
+		require.NoError(t, os.WriteFile(path, []byte("browser-widths = 15,35,50\nwrap = true\n"), 0o600))
+		cs := &configStore{path: path}
+		want := [3]int{10, 20, 70}
+		require.NoError(t, cs.PersistBrowserWidths(want))
 
-	got, err := parseBrowserWidths(value)
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
+		opts, err := parseArgs([]string{"--config", path})
+		require.NoError(t, err, "patched file must parse without a go-flags error")
+		assert.Equal(t, want, opts.ResolvedBrowserWidths())
+	})
 }
 
 func TestConfigStore_PersistBrowserWidths_emptyPathIsNoOp(t *testing.T) {

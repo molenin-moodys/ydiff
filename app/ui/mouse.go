@@ -617,6 +617,14 @@ func (b browserScreen) dividerAt(x, y int) int {
 // dragged pair does not have 2*minColumnWidth to give between them at all,
 // the drag is rejected outright (no clamp could produce a sane split).
 //
+// The third, untouched cell (the column not part of the dragged pair) is
+// still floored to 1 before the write-back: distributeWidths legitimately
+// returns 0 for a column whose normalized share rounds below one cell (e.g.
+// a "1,1,1000"-style --browser-widths at a merely-wide terminal), and a
+// persisted 0 makes parseBrowserWidths reject the config file on the next
+// launch, permanently bricking startup. Without this floor that 0 flows
+// straight from distributeWidths into b.widths untouched.
+//
 // In the medium tier only divider 1 exists (the parent column is off
 // screen), so the write-back preserves the hidden parent's proportion by
 // rescaling it against the pair's new combined width, guarding against a
@@ -642,6 +650,9 @@ func (b *browserScreen) resizeDividerTo(divider, x int) bool {
 		}
 		newLeft := clampInt(x-leftEdge-1, minColumnWidth, pairTotal-minColumnWidth)
 		cells[divider], cells[divider+1] = newLeft, pairTotal-newLeft
+		for i := range cells {
+			cells[i] = max(cells[i], 1)
+		}
 
 		newWidths := [3]int{cells[0], cells[1], cells[2]}
 		if newWidths == oldWidths {
@@ -661,7 +672,7 @@ func (b *browserScreen) resizeDividerTo(divider, x int) bool {
 		if pairTotal < 2*minColumnWidth {
 			return false
 		}
-		newLeft := clampInt(x-0-1, minColumnWidth, pairTotal-minColumnWidth)
+		newLeft := clampInt(x-1, minColumnWidth, pairTotal-minColumnWidth)
 		cells[0], cells[1] = newLeft, pairTotal-newLeft
 
 		denom := oldWidths[1] + oldWidths[2]
@@ -732,14 +743,34 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 // Left-button handling additionally drives a divider drag (task 4): a press
 // that lands on a divider (dividerAt >= 0) starts a drag instead of falling
 // through to clickBrowser's ordinary entry-selection behavior; motion events
-// while a drag is active recompute the widths via resizeDividerTo; release
-// ends the drag and issues persistWidthsCmd (task 5) to save the result via
-// the screen's BrowserWidthsPersister, if one is attached. Motion or release
-// with no drag in progress is a no-op — there is nothing to swallow a normal
-// click-drag-elsewhere sequence into.
+// while a drag is active recompute the widths via resizeDividerTo, latching
+// b.drag.changed once any motion actually moves them; release ends the drag
+// and issues persistWidthsCmd (task 5) to save the result via the screen's
+// BrowserWidthsPersister, if one is attached — but only when b.drag.changed,
+// so a bare click on a divider (no motion at all) never rewrites the config
+// file. Motion or release with no drag in progress is a no-op — there is
+// nothing to swallow a normal click-drag-elsewhere sequence into.
+//
+// A release is recognized regardless of which button tea reports it against:
+// a terminal without SGR extended mouse mode (mode 1006) reports a release
+// via the X10 fallback encoding as Button: MouseButtonNone, which would
+// otherwise never reach the MouseButtonLeft case below and leave the drag
+// stuck active — so any later button-held motion anywhere on screen would
+// keep resizing the divider. A fresh press also unconditionally clears any
+// stale drag state before deciding whether it lands on a divider, for the
+// same reason.
 func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if b.overlay != nil && b.overlay.Active() {
 		return b.handleBrowserOverlayMouse(msg)
+	}
+
+	if msg.Action == tea.MouseActionRelease && b.drag.active {
+		changed := b.drag.changed
+		b.drag = browserDrag{}
+		if changed {
+			return b, b.persistWidthsCmd()
+		}
+		return b, nil
 	}
 
 	switch msg.Button {
@@ -756,6 +787,7 @@ func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 	case tea.MouseButtonLeft:
 		switch msg.Action {
 		case tea.MouseActionPress:
+			b.drag = browserDrag{}
 			if d := b.dividerAt(msg.X, msg.Y); d >= 0 {
 				b.drag = browserDrag{active: true, divider: d}
 				return b, nil
@@ -765,14 +797,10 @@ func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			if !b.drag.active {
 				return b, nil
 			}
-			b.resizeDividerTo(b.drag.divider, msg.X)
-			return b, nil
-		case tea.MouseActionRelease:
-			if !b.drag.active {
-				return b, nil
+			if b.resizeDividerTo(b.drag.divider, msg.X) {
+				b.drag.changed = true
 			}
-			b.drag = browserDrag{}
-			return b, b.persistWidthsCmd()
+			return b, nil
 		default:
 			return b, nil
 		}
@@ -917,6 +945,7 @@ var browserMouseHelpEntries = []overlay.HelpEntry{
 	{Keys: "Click", Description: "select entry / enter directory / move focus to that pane"},
 	{Keys: "Click (changed header)", Description: "toggle uncommitted / branch scope"},
 	{Keys: "Wheel", Description: "scroll the focused pane"},
+	{Keys: "Drag (column border)", Description: "resize the columns; saved to the config file"},
 }
 
 // buildBrowserHelpSpec builds the browser screen's help overlay content: a
