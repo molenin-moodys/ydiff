@@ -1,0 +1,23 @@
+# name: yazi
+# description: yazi's minimalist default — vivid blue accent, reverse-video selection bar, terminal-native backgrounds
+# author: Misha Olenin
+# bundled: true
+
+chroma-style = github-dark
+color-accent = #5f87ff
+color-border = #808080
+color-normal = #d0d0d0
+color-muted = #585858
+color-selected-fg = #1a1a1a
+color-selected-bg = #d0d0d0
+color-annotation = #ffd700
+color-cursor-fg = #5fd7d7
+color-status-fg = #5f87ff
+color-add-fg = #87d787
+color-add-bg = #123800
+color-remove-fg = #ff8787
+color-remove-bg = #4a1818
+color-modify-fg = #f5c542
+color-modify-bg = #3d2e00
+color-search-fg = #1a1a1a
+color-search-bg = #4a4a00
