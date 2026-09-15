@@ -239,8 +239,9 @@ func (m Model) isQuitKey(msg tea.KeyMsg) bool {
 // browserScreen is the routing-level wrapper around browser.Nav: the piece
 // of the browser package's navigation state that satisfies tea.Model so
 // RootModel can delegate Update/View to it. Rendering here is a minimal
-// placeholder; the three-column view and changed-files pane are wired in
-// later tasks.
+// placeholder; RenderBrowserView (browserview.go, task 19) renders the real
+// three-column view and is wired in here once the changed-files pane (task
+// 20) has real content and focus-switching to hand it.
 type browserScreen struct {
 	nav *browser.Nav
 	km  *keymap.Keymap

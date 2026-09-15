@@ -129,6 +129,14 @@ func (m Model) renderTwoPaneLayout(leftContent, diffContent string, leftScroll s
 // are zero-width so they do not affect width math, but they can make a
 // path render as something the user did not actually approve.
 func (m Model) sanitizeFilenameForDisplay(s string) string {
+	return sanitizeFilenameForDisplay(s)
+}
+
+// sanitizeFilenameForDisplay is the free-function form of the method above,
+// shared with browserview.go (same package) so browser entry names, paths
+// and directory-read errors get the same defense-in-depth stripping as
+// review-screen filenames, without duplicating the rune table.
+func sanitizeFilenameForDisplay(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r < 0x20, r == 0x7F, r >= 0x80 && r <= 0x9F:
@@ -152,6 +160,15 @@ func (m Model) sanitizeFilenameForDisplay(s string) string {
 // budget visual columns, preserving the meaningful end. returns s unchanged
 // when it already fits, "" when budget <= 0, "…" when budget == 1.
 func (m Model) truncateLeftToWidth(s string, budget int) string {
+	return truncateLeftToWidth(s, budget)
+}
+
+// truncateLeftToWidth is the free-function form of the method above, shared
+// with browserview.go: browser entry names and directory headers are
+// left-truncated the same way as the diff header and status-bar filename,
+// keeping the meaningful (often extension-bearing) end of the name visible
+// and never panicking on multi-byte names.
+func truncateLeftToWidth(s string, budget int) string {
 	if lipgloss.Width(s) <= budget {
 		return s
 	}

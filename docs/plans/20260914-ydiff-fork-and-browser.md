@@ -537,17 +537,17 @@ single injected instance survives push and pop, and proves it.*
 *Takes column widths as a plain parameter. Task 22 wires the flag to it, so this task does
 not depend on flag parsing existing yet.*
 
-- [ ] write tests first on rendered output: three columns at the given proportions, parent
+- [x] write tests first on rendered output: three columns at the given proportions, parent
       column showing the current directory highlighted with no cursor of its own
-- [ ] implement rendering with lipgloss, reusing the inherited theme so browser and review
+- [x] implement rendering with lipgloss, reusing the inherited theme so browser and review
       look like one application
-- [ ] implement the status bar: current path, active filter, changed count, scope label and
+- [x] implement the status bar: current path, active filter, changed count, scope label and
       **branch name** (`4 changed - main`, per the design mock-up)
-- [ ] implement filter-match highlighting, the loading placeholder from task 13, and the
+- [x] implement filter-match highlighting, the loading placeholder from task 13, and the
       **inline directory error and symlink markers** from task 12
-- [ ] write tests for the narrow-terminal rules in Technical Details (>=100 / 60-99 / <60
+- [x] write tests for the narrow-terminal rules in Technical Details (>=100 / 60-99 / <60
       columns) and for entry names too long for their column
-- [ ] run `go test -race ./app/ui/...` — must pass before task 20
+- [x] run `go test -race ./app/ui/...` — must pass before task 20
 
 ### Task 20: Changed-files pane
 
