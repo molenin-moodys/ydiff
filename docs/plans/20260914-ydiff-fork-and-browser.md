@@ -403,14 +403,14 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/gitstate/cache.go`, `app/gitstate/cache_test.go`
 
-- [ ] write tests first: a repeat call for the same root and scope does not re-invoke git;
+- [x] write tests first: a repeat call for the same root and scope does not re-invoke git;
       explicit invalidation forces a recompute; different scopes and roots cache independently
-- [ ] implement the cache keyed by repository root plus scope, with explicit `Invalidate`
-- [ ] write a **concurrent read/write** test — Bubble Tea commands load from goroutines, so
+- [x] implement the cache keyed by repository root plus scope, with explicit `Invalidate`
+- [x] write a **concurrent read/write** test — Bubble Tea commands load from goroutines, so
       reads alone are not enough — and run it under `-race`
-- [ ] write a test asserting an error result is not cached, so a transient git failure does
+- [x] write a test asserting an error result is not cached, so a transient git failure does
       not stick
-- [ ] run `go test -race ./app/gitstate/...` — **phase 2 complete**
+- [x] run `go test -race ./app/gitstate/...` — **phase 2 complete**
 
 ### Task 12: browser — directory listing
 
