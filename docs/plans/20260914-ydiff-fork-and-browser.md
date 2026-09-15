@@ -449,15 +449,15 @@ reworking it to issue commands afterwards.*
 **Files:**
 - Create: `app/browser/nav.go`, `app/browser/nav_test.go`
 
-- [ ] write tests first: entering a directory moves the current path down; going up moves it
+- [x] write tests first: entering a directory moves the current path down; going up moves it
       back; going up from the filesystem root is a no-op
-- [ ] write the cursor-memory test: enter `app/`, go back up, and the cursor is on `app/`
+- [x] write the cursor-memory test: enter `app/`, go back up, and the cursor is on `app/`
       rather than at the top of the list
-- [ ] implement navigation state holding current path, cursor index, and a per-absolute-path
+- [x] implement navigation state holding current path, cursor index, and a per-absolute-path
       cursor memory map scoped to the session, nothing persisted to disk
-- [ ] write tests for a directory that disappeared between listing and entering, and for the
+- [x] write tests for a directory that disappeared between listing and entering, and for the
       parent-column listing being derived from the current path
-- [ ] run `go test -race ./app/browser/...` — must pass before task 15
+- [x] run `go test -race ./app/browser/...` — must pass before task 15
 
 ### Task 15: browser — substring filter
 
