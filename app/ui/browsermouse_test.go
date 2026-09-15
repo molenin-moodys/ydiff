@@ -160,11 +160,11 @@ func TestBrowserMouse_ClickChangedScopeLabel_TogglesScope(t *testing.T) {
 	root = updated.(RootModel)
 
 	assert.Equal(t, BrowserFocusChanged, root.browser.focus, "clicking the header must also focus the changed pane")
-	assert.Equal(t, gitstate.ScopeBranch, root.browser.changed.scope, "click must toggle scope exactly as `t` does")
+	assert.Equal(t, gitstate.ScopeBranch, root.browser.changed.scope, "click must toggle scope exactly as `g` does")
 }
 
 // TestBrowserMouse_KeyboardToggleScope_SameEffectAsClick cross-checks that
-// the `t` keybinding and the header click drive the identical code path
+// the `g` keybinding and the header click drive the identical code path
 // (same field mutated the same way), guarding against a parallel
 // implementation drifting from the original.
 func TestBrowserMouse_KeyboardToggleScope_SameEffectAsClick(t *testing.T) {
@@ -172,7 +172,7 @@ func TestBrowserMouse_KeyboardToggleScope_SameEffectAsClick(t *testing.T) {
 	viaKey := wideBrowserRoot(t, dir)
 	viaClick := wideBrowserRoot(t, dir)
 
-	updated, _ := viaKey.Update(keyMsg('t'))
+	updated, _ := viaKey.Update(keyMsg('g'))
 	viaKey = updated.(RootModel)
 
 	_, changedX := viaClick.browser.columnXRanges()

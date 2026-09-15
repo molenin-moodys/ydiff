@@ -74,10 +74,9 @@ const (
 	// browser action constants. These live in a separate binding namespace
 	// (Keymap.browserBindings) from the review-screen actions above, resolved
 	// through ResolveBrowser rather than Resolve. This lets a letter such as
-	// "d" or "t" mean one thing in the review screen (delete_annotation,
-	// toggle_tree) and something else entirely in the browser
-	// (browser_review, browser_toggle_scope) without either screen's default
-	// bindings colliding with the other's.
+	// "d" mean one thing in the review screen (delete_annotation) and
+	// something else entirely in the browser (browser_review) without
+	// either screen's default bindings colliding with the other's.
 	ActionBrowserUp           Action = "browser_up"
 	ActionBrowserDown         Action = "browser_down"
 	ActionBrowserPageUp       Action = "browser_page_up"
@@ -381,7 +380,7 @@ func defaultBrowserBindings() map[string]Action {
 		"/":      ActionBrowserFilter,
 		"esc":    ActionBrowserDismiss,
 		"d":      ActionBrowserReview,
-		"t":      ActionBrowserToggleScope,
+		"g":      ActionBrowserToggleScope,
 		"r":      ActionBrowserRefresh,
 		".":      ActionBrowserToggleHidden,
 		"tab":    ActionBrowserFocusPane,
@@ -471,7 +470,7 @@ func (km *Keymap) resolveBrowserKey(key string) Action {
 
 // ResolveBrowser returns the browser action bound to key. When filterActive
 // is false (plain navigation), every bound key resolves normally, including
-// letter commands such as "d" (browser_review) or "t" (browser_toggle_scope).
+// letter commands such as "d" (browser_review) or "g" (browser_toggle_scope).
 //
 // When filterActive is true, the same letters are literal text being typed
 // into the filter box, not commands: only ActionBrowserEnter (apply the
