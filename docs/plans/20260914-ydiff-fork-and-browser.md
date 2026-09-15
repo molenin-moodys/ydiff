@@ -518,15 +518,15 @@ registering them afterwards would mean reworking all three.*
 `main.go:261` after the program exits. This task does not move ownership — it guarantees the
 single injected instance survives push and pop, and proves it.*
 
-- [ ] write the test this task exists for: annotate in review, pop to the browser, enter
+- [x] write the test this task exists for: annotate in review, pop to the browser, enter
       review on a different file, annotate again — exiting produces **one** output with both
-- [ ] verify the root model passes the injected store down on every review-screen push and
+- [x] verify the root model passes the injected store down on every review-screen push and
       never re-creates it on pop
-- [ ] verify exit from either screen reaches the same flush path, writing stdout or
+- [x] verify exit from either screen reaches the same flush path, writing stdout or
       `--output` and the history copy under `~/.config/ydiff/history/`
-- [ ] write a test asserting exit code 10 under `--exit-code-on-annotations` when the
+- [x] write a test asserting exit code 10 under `--exit-code-on-annotations` when the
       annotations came via the browser path
-- [ ] run `go test -race ./app/ui/...` — must pass before task 19
+- [x] run `go test -race ./app/ui/...` — must pass before task 19
 
 ### Task 19: Three-column browser view
 

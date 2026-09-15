@@ -3,6 +3,7 @@ package ui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/molenin-moodys/ydiff/app/annotation"
 	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/keymap"
@@ -196,6 +197,19 @@ func (r *RootModel) invalidateGitCache() {
 		return
 	}
 	r.gitCache.Invalidate(repo.Root, r.scope)
+}
+
+// Store returns the annotation store owned by the review screen. Both entry
+// points inject one instance at construction (see NewRootReview,
+// NewRootBrowser) and Update never replaces r.review, only mutates it in
+// place — so this returns the exact same *annotation.Store regardless of
+// which screen is active or how many times review has been pushed and
+// popped. main.go reads it back through here (once the root model is wired
+// into the entry point) to flush annotations to stdout/--output and to
+// history after the program exits, exactly as it does today when reading a
+// bare review Model directly.
+func (r RootModel) Store() *annotation.Store {
+	return r.review.Store()
 }
 
 // View renders whichever screen is currently active.
