@@ -1210,7 +1210,7 @@ func TestDefaultBrowser_allExpectedBindings(t *testing.T) {
 		{"/", ActionBrowserFilter},
 		{"esc", ActionBrowserDismiss},
 		{"d", ActionBrowserReview},
-		{"t", ActionBrowserToggleScope},
+		{"g", ActionBrowserToggleScope},
 		{"r", ActionBrowserRefresh},
 		{".", ActionBrowserToggleHidden},
 		{"tab", ActionBrowserFocusPane},
@@ -1248,7 +1248,7 @@ func TestResolveBrowser_SeparationTest(t *testing.T) {
 
 	t.Run("letters are commands during navigation", func(t *testing.T) {
 		assert.Equal(t, ActionBrowserReview, km.ResolveBrowser("d", false))
-		assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false))
+		assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("g", false))
 		assert.Equal(t, ActionBrowserRefresh, km.ResolveBrowser("r", false))
 		assert.Equal(t, ActionBrowserToggleHidden, km.ResolveBrowser(".", false))
 		assert.Equal(t, ActionBrowserQuit, km.ResolveBrowser("q", false))
@@ -1257,7 +1257,7 @@ func TestResolveBrowser_SeparationTest(t *testing.T) {
 
 	t.Run("the same letters are literal text once the filter is active", func(t *testing.T) {
 		assert.Equal(t, Action(""), km.ResolveBrowser("d", true), "d must not be a command while filtering")
-		assert.Equal(t, Action(""), km.ResolveBrowser("t", true), "t must not be a command while filtering")
+		assert.Equal(t, Action(""), km.ResolveBrowser("g", true), "g must not be a command while filtering")
 		assert.Equal(t, Action(""), km.ResolveBrowser("r", true), "r must not be a command while filtering")
 		assert.Equal(t, Action(""), km.ResolveBrowser(".", true), ". must not be a command while filtering")
 		assert.Equal(t, Action(""), km.ResolveBrowser("q", true), "q must not quit while filtering")
@@ -1295,7 +1295,8 @@ func TestBrowserActions_RegisteredAlongsideReviewActions(t *testing.T) {
 	assert.Equal(t, ActionBrowserReview, km.ResolveBrowser("d", false), "browser 'd' opens the review screen")
 
 	assert.Equal(t, ActionToggleTree, km.Resolve("t"), "review 't' is unaffected by the browser registration")
-	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false), "browser 't' toggles scope")
+	assert.Equal(t, Action(""), km.ResolveBrowser("t", false), "browser 't' is unbound (scope toggle moved to g)")
+	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("g", false), "browser 'g' toggles scope")
 
 	assert.Equal(t, ActionToggleHunk, km.Resolve("."), "review '.' is unaffected by the browser registration")
 	assert.Equal(t, ActionBrowserToggleHidden, km.ResolveBrowser(".", false), "browser '.' toggles hidden files")
@@ -1346,7 +1347,7 @@ func TestLoad_customBrowserBindingOverridesDefault(t *testing.T) {
 	km, err := Load(tmpFile)
 	require.NoError(t, err)
 	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("d", false), "custom binding must override the default browser action for d")
-	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("t", false), "unrelated default browser bindings must be unaffected")
+	assert.Equal(t, ActionBrowserToggleScope, km.ResolveBrowser("g", false), "unrelated default browser bindings must be unaffected")
 	// review namespace is untouched by a remap of a browser action
 	assert.Equal(t, ActionDeleteAnnotation, km.Resolve("d"), "review binding for d must be unaffected by a browser remap")
 }

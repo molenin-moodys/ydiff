@@ -80,7 +80,7 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | Left | go up one level, or return focus to the columns when the changed-files pane is focused |
 | `/` | start filter; typing narrows the list live; `Enter` applies (filter stays active); `Esc` cancels and clears it |
 | `d` | open the review screen on the whole changeset |
-| `t` | toggle `uncommitted` / `branch` scope |
+| `g` | toggle `uncommitted` / `branch` scope |
 | `r` | refresh the changed-files list |
 | `.` | toggle hidden files |
 | `Tab` | move focus between the current-directory column and the changed-files pane |
