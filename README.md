@@ -133,8 +133,10 @@ back to the resolved config file (`~/.config/ydiff/config` by default, or the pa
 value. Because a config-file value wins over the same-named env var in this fork (see
 [Flags](#flags)), once a drag has written `browser-widths` it also takes precedence over
 `YDIFF_BROWSER_WIDTHS`; remove the `browser-widths` line from the config to restore the
-env var. If no config path is resolved (e.g. `--config` points nowhere writable), dragging
-still resizes the columns for the rest of the session, just without persisting.
+env var. If no config path could be resolved at all (only when `os.UserHomeDir()` fails and
+neither `--config` nor `YDIFF_CONFIG` is set — an explicit `--config` path is used as given,
+writable or not), dragging still resizes the columns for the rest of the session, just
+without persisting.
 
 ## The review screen
 

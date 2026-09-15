@@ -531,36 +531,27 @@ func (b browserScreen) paneContentHeight() int {
 func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
 	notRendered := [2]int{-1, -1}
 	widths := b.effectiveWidths()
+	cells, first := browserColumnCells(b.width, widths, b.focus)
 
 	switch {
 	case b.width >= wideTierWidth:
-		available := max(b.width-6, 0)
-		w := distributeWidths(available, []int{widths[0], widths[1], widths[2]})
-		parentBoxW := w[0] + 2
-		currentBoxW := w[1] + 2
+		parentBoxW := cells[0] + 2
+		currentBoxW := cells[1] + 2
 		currentX = [2]int{parentBoxW, parentBoxW + currentBoxW}
 		changedX = [2]int{parentBoxW + currentBoxW, b.width}
 		return currentX, changedX
 	case b.width >= mediumTierWidth:
-		available := max(b.width-4, 0)
-		w := distributeWidths(available, []int{widths[1], widths[2]})
-		currentBoxW := w[0] + 2
+		currentBoxW := cells[0] + 2
 		currentX = [2]int{0, currentBoxW}
 		changedX = [2]int{currentBoxW, b.width}
 		return currentX, changedX
 	default:
-		if b.focus == BrowserFocusChanged {
+		if first == 2 {
 			return notRendered, [2]int{0, b.width}
 		}
 		return [2]int{0, b.width}, notRendered
 	}
 }
-
-// minColumnWidth is the smallest cell width a drag will leave a Miller
-// column at: enough room for a truncated entry name plus its trailing "/"
-// directory marker, so a dragged-thin column still reads as a column rather
-// than degenerating into an unusable sliver.
-const minColumnWidth = 8
 
 // dividerAt classifies a screen coordinate as sitting on a draggable divider
 // between two Miller-column boxes, returning its global index (0 =
@@ -582,10 +573,9 @@ func (b browserScreen) dividerAt(x, y int) int {
 	}
 
 	widths := b.effectiveWidths()
+	cells, _ := browserColumnCells(b.width, widths, b.focus)
 	switch {
 	case b.width >= wideTierWidth:
-		available := max(b.width-6, 0)
-		cells := distributeWidths(available, []int{widths[0], widths[1], widths[2]})
 		if x == cells[0]+1 || x == cells[0]+2 {
 			return 0
 		}
@@ -594,8 +584,6 @@ func (b browserScreen) dividerAt(x, y int) int {
 		}
 		return -1
 	case b.width >= mediumTierWidth:
-		available := max(b.width-4, 0)
-		cells := distributeWidths(available, []int{widths[1], widths[2]})
 		if x == cells[0]+1 || x == cells[0]+2 {
 			return 1
 		}
@@ -606,30 +594,22 @@ func (b browserScreen) dividerAt(x, y int) int {
 }
 
 // resizeDividerTo recomputes column widths from a divider drag's pointer
-// position, per the design's "Drag arithmetic" section, and writes the
-// result back into b.widths. It reports whether b.widths actually changed —
-// a drag that lands back on the same cell widths (or targets a tier/divider
-// combination that does not exist) is a no-op and returns false, so a caller
-// driving a persistence command off the return value never fires one for a
-// non-event.
+// position and writes the result back into b.widths. It reports whether
+// b.widths actually changed — a drag that lands back on the same cell
+// widths (or targets a tier/divider combination that does not exist) is a
+// no-op and returns false, so a caller driving a persistence command off the
+// return value never fires one for a non-event.
 //
-// newLeft is clamped to [minEach, pairTotal-minEach], where minEach is
-// normally minColumnWidth but shrinks to pairTotal/2 when the pair doesn't
-// have 2*minColumnWidth to give between them at all (e.g. a tiny persisted
-// proportion re-hydrated at a narrower terminal via distributeWidths). This
-// still lets the user push the divider to an even split rather than
-// rejecting the drag outright: a hard reject here left the divider
-// grabbable (dividerAt doesn't know about the shortage) but permanently
-// unresponsive, with widths only recoverable by widening the terminal,
-// dragging a different divider, or hand-editing the config file.
-//
-// The third, untouched cell (the column not part of the dragged pair) is
-// still floored to 1 before the write-back: distributeWidths legitimately
-// returns 0 for a column whose normalized share rounds below one cell (e.g.
-// a "1,1,1000"-style --browser-widths at a merely-wide terminal), and a
-// persisted 0 makes parseBrowserWidths reject the config file on the next
-// launch, permanently bricking startup. Without this floor that 0 flows
-// straight from distributeWidths into b.widths untouched.
+// The pointer position is converted to boundary space and clamped, then
+// cascaded, by cascadeResize — see its doc comment for the arithmetic. This
+// replaces an earlier pair-conserving scheme (resize the dragged divider's
+// two neighbor cells, holding their sum fixed) that could never let a
+// starved pair reclaim cells from the third column, the one actually
+// hogging them; a pair rehydrated below 2*minColumnWidth (e.g. persisted at
+// the minimum on a wide terminal, then reopened much narrower) left every
+// subsequent drag on that divider permanently rejected. The cascading clamp
+// has no such dead zone: it only refuses a drag when the terminal cannot
+// seat every column at minColumnWidth at all.
 //
 // In the medium tier only divider 1 exists (the parent column is off
 // screen), so the write-back preserves the hidden parent's proportion by
@@ -644,21 +624,14 @@ func (b *browserScreen) resizeDividerTo(divider, x int) bool {
 			return false
 		}
 		available := max(b.width-6, 0)
-		cells := distributeWidths(available, []int{oldWidths[0], oldWidths[1], oldWidths[2]})
+		cells := distributeBrowserWidths(available, []int{oldWidths[0], oldWidths[1], oldWidths[2]})
 
-		leftEdge := 0
-		if divider == 1 {
-			leftEdge = cells[0] + 2
-		}
-		pairTotal := cells[divider] + cells[divider+1]
-		minEach := minPairShare(pairTotal)
-		newLeft := clampInt(x-leftEdge-1, minEach, pairTotal-minEach)
-		cells[divider], cells[divider+1] = newLeft, pairTotal-newLeft
-		for i := range cells {
-			cells[i] = max(cells[i], 1)
+		newCells, ok := cascadeResize(cells, divider, x)
+		if !ok {
+			return false
 		}
 
-		newWidths := [3]int{cells[0], cells[1], cells[2]}
+		newWidths := [3]int{newCells[0], newCells[1], newCells[2]}
 		if newWidths == oldWidths {
 			return false
 		}
@@ -670,19 +643,19 @@ func (b *browserScreen) resizeDividerTo(divider, x int) bool {
 			return false
 		}
 		available := max(b.width-4, 0)
-		cells := distributeWidths(available, []int{oldWidths[1], oldWidths[2]})
+		cells := distributeBrowserWidths(available, []int{oldWidths[1], oldWidths[2]})
 
-		pairTotal := cells[0] + cells[1]
-		minEach := minPairShare(pairTotal)
-		newLeft := clampInt(x-1, minEach, pairTotal-minEach)
-		cells[0], cells[1] = newLeft, pairTotal-newLeft
+		newCells, ok := cascadeResize(cells, 0, x)
+		if !ok {
+			return false
+		}
 
 		denom := oldWidths[1] + oldWidths[2]
 		parent := max(1, oldWidths[0])
 		if denom > 0 {
-			parent = max(1, oldWidths[0]*(cells[0]+cells[1])/denom)
+			parent = max(1, oldWidths[0]*(newCells[0]+newCells[1])/denom)
 		}
-		newWidths := [3]int{parent, cells[0], cells[1]}
+		newWidths := [3]int{parent, newCells[0], newCells[1]}
 		if newWidths == oldWidths {
 			return false
 		}
@@ -694,28 +667,73 @@ func (b *browserScreen) resizeDividerTo(divider, x int) bool {
 	}
 }
 
-// clampInt restricts v to [lo, hi]. Used by resizeDividerTo's drag
-// arithmetic; lo <= hi always holds because minPairShare never exceeds
-// pairTotal/2.
-func clampInt(v, lo, hi int) int {
-	return max(lo, min(v, hi))
+// cascadeResize repositions divider j (0-based, indexing the *visible*
+// cells slice — not b.widths' global index) to pointer column x, and
+// reports the resulting cell widths, or ok=false when available cannot seat
+// every column at minColumnWidth at all.
+//
+// Screen columns count each divider as occupying 2 cells (the border column
+// plus the one beside it, matching dividerAt's 2-wide grab band), so x
+// converts to "boundary space" (the cumulative-sum position of divider j)
+// as p = x - 2*j - 1. That matches the geometry the render/hit-test side
+// already uses: for j == 0 this is the previous scheme's `x - 0 - 1`
+// (leftEdge 0), and for j == 1 it is `leftEdge = cells[0]+2, x - leftEdge -
+// 1` = `x - cells[0] - 3`, i.e. boundary space `cells[0]+cells[1] = x - 3`
+// — independent of cells[0], as required.
+//
+// p is clamped to [lo, hi], where lo/hi are the coarsest bounds that still
+// leave room for every column (0..j) and (j+1..n-1) respectively to reach
+// minColumnWidth; boundary j is then pushed to that clamped position, and
+// every other boundary is cascaded outward just enough to keep its own pair
+// of columns at minColumnWidth — pushing left of j left, and right of j
+// right — so a divider dragged toward a neighbor first squeezes that
+// neighbor down to the floor and only then, if still short of room, borrows
+// from the column beyond it. This is what lets a starved pair reclaim cells
+// from the third column, which the old pair-conserving scheme could never
+// do.
+func cascadeResize(cells []int, j, x int) (out []int, ok bool) {
+	n := len(cells)
+	total := 0
+	for _, c := range cells {
+		total += c
+	}
+
+	bounds := make([]int, n-1)
+	sum := 0
+	for i := 0; i < n-1; i++ {
+		sum += cells[i]
+		bounds[i] = sum
+	}
+
+	p := x - 2*j - 1
+	lo := minColumnWidth * (j + 1)
+	hi := total - minColumnWidth*(n-1-j)
+	if lo > hi {
+		return nil, false
+	}
+	bounds[j] = clampInt(p, lo, hi)
+
+	for i := j - 1; i >= 0; i-- {
+		bounds[i] = min(bounds[i], bounds[i+1]-minColumnWidth)
+	}
+	for i := j + 1; i <= n-2; i++ {
+		bounds[i] = max(bounds[i], bounds[i-1]+minColumnWidth)
+	}
+
+	out = make([]int, n)
+	prev := 0
+	for i := 0; i < n-1; i++ {
+		out[i] = bounds[i] - prev
+		prev = bounds[i]
+	}
+	out[n-1] = total - prev
+	return out, true
 }
 
-// minPairShare returns the minimum width resizeDividerTo will leave each
-// side of a dragged divider's pair. It is normally minColumnWidth, but for a
-// pair too small to give minColumnWidth to both sides (pairTotal <
-// 2*minColumnWidth) it falls back to pairTotal/2, splitting the pair evenly
-// instead of refusing the drag. That shortage is reachable at runtime: a
-// column count is persisted as a normalized *proportion*, not a cell width,
-// so a pair dragged down to the minimum on a wide terminal and then
-// rehydrated via distributeWidths at a much narrower terminal can land
-// below 2*minColumnWidth even though the original drag never violated the
-// minimum in cell space.
-func minPairShare(pairTotal int) int {
-	if pairTotal < 2*minColumnWidth {
-		return pairTotal / 2
-	}
-	return minColumnWidth
+// clampInt restricts v to [lo, hi]. Used by cascadeResize; the caller
+// guarantees lo <= hi before calling.
+func clampInt(v, lo, hi int) int {
+	return max(lo, min(v, hi))
 }
 
 // hitTest classifies a browser-screen screen coordinate into a

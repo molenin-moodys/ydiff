@@ -137,15 +137,23 @@ func TestBrowserScreen_ResizeDividerTo_WideTierDrag(t *testing.T) {
 }
 
 // TestBrowserScreen_ResizeDividerTo_ClampsAtMinColumnWidth verifies a drag
-// past either end of the pair is clamped to minColumnWidth rather than
-// producing a degenerate or negative width.
+// past either end of the visible cells is clamped to minColumnWidth rather
+// than producing a degenerate or negative width. A drag far enough past the
+// pair's own combined room now cascades into the third column too (the
+// fix's whole point — a starved pair can reclaim cells from the column
+// actually hogging them), so the far-right case here differs from the old
+// pair-conserving behavior: it no longer merely swaps the pair's own total,
+// it also shrinks the third column down to minColumnWidth.
 func TestBrowserScreen_ResizeDividerTo_ClampsAtMinColumnWidth(t *testing.T) {
 	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
 	available := max(b.width-6, 0)
 	cells := distributeWidths(available, []int{15, 35, 50})
 	pairTotal := cells[0] + cells[1]
 
-	// drag far to the left of the box (x <= leftEdge): clamps to minColumnWidth.
+	// drag far to the left of the box (x <= leftEdge): clamps to
+	// minColumnWidth; the third column is far from the dragged divider and
+	// the pair alone has enough room, so it is untouched (matches the old
+	// pair-conserving behavior in this direction).
 	if !b.resizeDividerTo(0, -1000) {
 		t.Fatal("expected a change (clamped, not a no-op)")
 	}
@@ -155,64 +163,70 @@ func TestBrowserScreen_ResizeDividerTo_ClampsAtMinColumnWidth(t *testing.T) {
 	if b.widths[1] != pairTotal-minColumnWidth {
 		t.Fatalf("widths[1] = %d, want %d", b.widths[1], pairTotal-minColumnWidth)
 	}
+	if b.widths[2] != cells[2] {
+		t.Fatalf("widths[2] = %d, want unchanged %d", b.widths[2], cells[2])
+	}
 
-	// drag far to the right: clamps the other way.
+	// drag far to the right: the pair alone cannot give divider 0's column
+	// everything it is asking for, so the cascade also shrinks the third
+	// column to minColumnWidth rather than stopping at the pair's total.
 	b2 := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
 	if !b2.resizeDividerTo(0, 100000) {
 		t.Fatal("expected a change (clamped, not a no-op)")
 	}
+	total := cells[0] + cells[1] + cells[2]
+	wantParent := total - 2*minColumnWidth
+	if b2.widths[0] != wantParent {
+		t.Fatalf("widths[0] = %d, want %d (cascaded past the pair into the third column)", b2.widths[0], wantParent)
+	}
 	if b2.widths[1] != minColumnWidth {
 		t.Fatalf("widths[1] = %d, want clamped to %d", b2.widths[1], minColumnWidth)
 	}
-	if b2.widths[0] != pairTotal-minColumnWidth {
-		t.Fatalf("widths[0] = %d, want %d", b2.widths[0], pairTotal-minColumnWidth)
+	if b2.widths[2] != minColumnWidth {
+		t.Fatalf("widths[2] = %d, want cascaded down to %d (the fix under test: a starved pair reclaims cells from the third column)", b2.widths[2], minColumnWidth)
 	}
 }
 
-// TestBrowserScreen_ResizeDividerTo_StarvedPairClampsToHalf verifies a
-// divider whose pair does not have 2*minColumnWidth to give is no longer
-// rejected outright: it clamps each side to pairTotal/2 (an even split)
-// instead of permanently no-opping. See
-// TestBrowserScreen_ResizeDividerTo_RehydratedStarvedPairIsNotPermanentlyStuck
-// for why an outright rejection here was a bug, not just a design choice.
-func TestBrowserScreen_ResizeDividerTo_StarvedPairClampsToHalf(t *testing.T) {
-	// a very narrow wide-tier width (just over 100) leaves little room; force
-	// a pair with less than 2*minColumnWidth by giving one side almost all
-	// the proportion.
-	b := browserScreen{width: 100, height: 40, widths: [3]int{1, 1, 1000}}
-	available := max(b.width-6, 0)
-	cells := distributeWidths(available, []int{1, 1, 1000})
-	pairTotal := cells[0] + cells[1]
-	require.Less(t, pairTotal, 2*minColumnWidth,
-		"fixture must produce a starved pair for divider 0; cells=%v", cells)
+// TestBrowserScreen_CascadeResize_RejectsWhenTerminalCannotSeatEveryColumn
+// verifies cascadeResize refuses a drag (ok=false) when available cannot
+// seat every column at minColumnWidth at all — the only case left, after the
+// distributeBrowserWidths floor (see TestDistributeBrowserWidths_RaisesFloor
+// and friends), where a starved pair can still occur. This replaces
+// TestBrowserScreen_ResizeDividerTo_StarvedPairClampsToHalf: that test's
+// fixture (widths {1, 1, 1000} at a 100-column terminal) no longer produces
+// a starved pair at all once resizeDividerTo distributes through
+// distributeBrowserWidths instead of plain distributeWidths — the floor now
+// fixes the starvation before cascadeResize ever runs, which is the design's
+// intended division of labor between the two parts of the fix.
+func TestBrowserScreen_CascadeResize_RejectsWhenTerminalCannotSeatEveryColumn(t *testing.T) {
+	// 3 columns need 24 cells at minColumnWidth=8; 20 is not enough for any
+	// divider's lo/hi to leave room for both sides.
+	_, ok := cascadeResize([]int{6, 7, 7}, 0, 50)
+	assert.False(t, ok, "cascadeResize must reject a drag when the terminal cannot seat every column at minColumnWidth")
 
-	if !b.resizeDividerTo(0, 50) {
-		t.Fatal("resizeDividerTo reported no change for a starved pair; it must clamp instead of rejecting")
-	}
-	wantEach := max(pairTotal/2, 1) // floored to 1 by the never-writes-zero guard
-	if b.widths[0] != wantEach || b.widths[1] != wantEach {
-		t.Fatalf("widths[0:2] = %v, want an even split of %d each (pairTotal=%d)", b.widths[:2], wantEach, pairTotal)
-	}
+	_, ok = cascadeResize([]int{6, 7, 7}, 1, 50)
+	assert.False(t, ok, "cascadeResize must reject a drag on either divider under the same shortage")
 }
 
-// TestBrowserScreen_ResizeDividerTo_RehydratedStarvedPairIsNotPermanentlyStuck
-// reproduces the reported dead-grab-band scenario: proportions are persisted
-// in *cell* space from a wide terminal (drag both parent and current down to
-// minColumnWidth on a 300-col terminal), then the config is reloaded at a
-// much narrower 100-col terminal. distributeWidths re-normalizes those
-// proportions down to a pair with less than 2*minColumnWidth to give, even
-// though the original drag never violated the minimum in cell space. Before
-// the fix, resizeDividerTo rejected every subsequent drag on that divider
-// outright and b.widths was never updated, so the divider stayed dead until
-// the user widened the terminal, dragged the *other* divider, or hand-edited
-// the config file. After the fix the drag still succeeds (clamped to an even
-// split of the starved pair) and b.widths is updated to reflect the current
-// concrete cell distribution rather than being frozen at the stale,
-// now-unusable persisted proportions.
-func TestBrowserScreen_ResizeDividerTo_RehydratedStarvedPairIsNotPermanentlyStuck(t *testing.T) {
+// TestBrowserScreen_ResizeDividerTo_RehydratedTerminalDividerIsUsable
+// reproduces the reported dead-grab-band scenario end to end: proportions
+// are persisted in *cell* space from a wide terminal (drag both parent and
+// current down to minColumnWidth on a 300-col terminal), then the config is
+// reloaded at a much narrower 100-col terminal.
+//
+// Before the fix, distributeWidths re-normalized those proportions down to
+// a pair with less than 2*minColumnWidth to give (even though the original
+// drag never violated the minimum in cell space), and resizeDividerTo's
+// pair-conserving clampInt range collapsed to a single legal position —
+// every subsequent drag on that divider returned false, forever. The
+// distributeBrowserWidths floor (Part 1) now keeps every column at or above
+// minColumnWidth at distribution time, so the starved pair never
+// materializes in the first place; this test proves the divider stays
+// usable across a whole range of drag positions, not just the first one.
+func TestBrowserScreen_ResizeDividerTo_RehydratedTerminalDividerIsUsable(t *testing.T) {
 	// on a 300-col terminal, dragging divider 0 so parent and current both
 	// bottom out at minColumnWidth (available = 300-6 = 294) persists as
-	// widths [8, 8, 286] — exactly the finding's "drag parent and current
+	// widths [8, 8, 278] — exactly the finding's "drag parent and current
 	// both down to the 8-cell minimum" scenario.
 	wide := browserScreen{width: 300, height: 40, widths: [3]int{15, 35, 50}}
 	require.True(t, wide.resizeDividerTo(0, -100000), "drag divider 0 to the far left should clamp parent to minColumnWidth")
@@ -220,24 +234,100 @@ func TestBrowserScreen_ResizeDividerTo_RehydratedStarvedPairIsNotPermanentlyStuc
 	persisted := wide.widths
 	require.Equal(t, minColumnWidth, persisted[0])
 	require.Equal(t, minColumnWidth, persisted[1])
+	require.Equal(t, [3]int{8, 8, 278}, persisted, "sanity-check the exact numbers from the reported scenario")
 
-	// reopen at 100 columns with those persisted proportions.
-	b := browserScreen{width: 100, height: 40, widths: persisted}
-	narrowAvailable := max(b.width-6, 0)
-	cells := distributeWidths(narrowAvailable, []int{persisted[0], persisted[1], persisted[2]})
-	pairTotal := cells[0] + cells[1]
-	require.Less(t, pairTotal, 2*minColumnWidth,
-		"rehydrating persisted proportions at a narrower terminal must reproduce the starved pair; cells=%v", cells)
+	// reopen at 100 columns with those persisted proportions. With the
+	// distributeBrowserWidths floor in place this no longer rehydrates to a
+	// starved pair — that is exactly what this test is verifying holds up
+	// under a real drag, not just at distribution time.
+	narrowAvailable := max(100-6, 0)
+	floored := distributeBrowserWidths(narrowAvailable, []int{persisted[0], persisted[1], persisted[2]})
+	require.GreaterOrEqual(t, floored[0], minColumnWidth)
+	require.GreaterOrEqual(t, floored[1], minColumnWidth)
+	require.GreaterOrEqual(t, floored[2], minColumnWidth)
 
-	// before the fix this returned false, forever, for any x, and b.widths
-	// stayed frozen at the stale persisted proportions.
-	before := b.widths
-	if !b.resizeDividerTo(0, 1) {
-		t.Fatal("resizeDividerTo must not permanently reject a drag on a rehydrated starved pair")
+	var gotParentWidths []int
+	for _, x := range []int{9, 15, 30, 50, 70, 79} {
+		b := browserScreen{width: 100, height: 40, widths: persisted}
+		require.True(t, b.resizeDividerTo(0, x), "drag on the rehydrated divider must succeed at x=%d", x)
+		for i, w := range b.widths {
+			assert.GreaterOrEqualf(t, w, minColumnWidth, "widths[%d]=%d must never drop below minColumnWidth at x=%d", i, w, x)
+		}
+		gotParentWidths = append(gotParentWidths, b.widths[0])
 	}
-	assert.NotEqual(t, before, b.widths, "widths must move off the stale persisted proportions")
-	assert.GreaterOrEqual(t, b.widths[0], 1, "widths must never go to 0")
-	assert.GreaterOrEqual(t, b.widths[1], 1, "widths must never go to 0")
+
+	distinct := map[int]bool{}
+	for _, w := range gotParentWidths {
+		distinct[w] = true
+	}
+	assert.Greater(t, len(distinct), 1,
+		"the parent column's width must actually track the pointer across a range of drags, not stick at one value: got %v", gotParentWidths)
+}
+
+// TestBrowserScreen_ResizeDividerTo_CascadesBothDirections verifies a drag
+// that needs more room than its own pair has pushes the *other* boundary
+// too — the cascade that lets a starved pair reclaim cells from the column
+// beyond it, in both directions (divider 0 pushing divider 1's boundary
+// right, and divider 1 pushing divider 0's boundary left).
+func TestBrowserScreen_ResizeDividerTo_CascadesBothDirections(t *testing.T) {
+	// divider 0 dragged far right needs more than its own pair (cells[0]+
+	// cells[1]) can give, so it must push the current|changed boundary
+	// (cells[0]+cells[1], i.e. bounds[1]) further right than its pre-drag
+	// position.
+	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
+	available := max(b.width-6, 0)
+	cells := distributeWidths(available, []int{15, 35, 50})
+	oldBound1 := cells[0] + cells[1]
+
+	require.True(t, b.resizeDividerTo(0, 100000))
+	newBound1 := b.widths[0] + b.widths[1]
+	assert.Greater(t, newBound1, oldBound1, "dragging divider 0 into a shortage must push divider 1's boundary right")
+
+	// divider 1 dragged far left needs more than its own pair (cells[1]+
+	// cells[2]) can give, so it must push the parent|current boundary
+	// (cells[0]) further left than its pre-drag position.
+	b2 := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
+	oldBound0 := cells[0]
+
+	require.True(t, b2.resizeDividerTo(1, -100000))
+	newBound0 := b2.widths[0]
+	assert.Less(t, newBound0, oldBound0, "dragging divider 1 into a shortage must push divider 0's boundary left")
+}
+
+// TestDistributeBrowserWidths_RaisesFloor verifies a starved column is
+// raised to minColumnWidth and the deficit is taken from the widest column,
+// with the total staying exactly available.
+func TestDistributeBrowserWidths_RaisesFloor(t *testing.T) {
+	got := distributeBrowserWidths(94, []int{1, 1, 1000})
+	sum := 0
+	for _, w := range got {
+		assert.GreaterOrEqual(t, w, minColumnWidth, "every column must be raised to minColumnWidth")
+		sum += w
+	}
+	assert.Equal(t, 94, sum, "total must stay exactly available")
+	assert.Equal(t, []int{8, 8, 78}, got)
+}
+
+// TestDistributeBrowserWidths_FixedPoint verifies the fixed-point property:
+// if every input cell is already >= minColumnWidth and sums to available,
+// the output equals the input unchanged. This is what keeps cell counts
+// usable as proportions and what makes a divider drag's round trip through
+// distributeBrowserWidths stable.
+func TestDistributeBrowserWidths_FixedPoint(t *testing.T) {
+	in := []int{17, 39, 58} // sums to 114, all above minColumnWidth
+	got := distributeBrowserWidths(114, in)
+	assert.Equal(t, in, got)
+}
+
+// TestDistributeBrowserWidths_TooNarrowFallsThroughUnchanged verifies that
+// when available cannot even seat every column at minColumnWidth, the plain
+// proportional split from distributeWidths stands unchanged — there is
+// nothing sensible to enforce.
+func TestDistributeBrowserWidths_TooNarrowFallsThroughUnchanged(t *testing.T) {
+	available := 20 // < 3*minColumnWidth (24)
+	plain := distributeWidths(available, []int{1, 1, 1000})
+	got := distributeBrowserWidths(available, []int{1, 1, 1000})
+	assert.Equal(t, plain, got, "below len*minColumnWidth, distributeBrowserWidths must fall through unchanged")
 }
 
 // TestBrowserScreen_ResizeDividerTo_NeverWritesZero verifies that dragging

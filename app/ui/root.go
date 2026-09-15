@@ -648,15 +648,17 @@ func (b browserScreen) ReviewTarget() (path string, ok bool) {
 // into. widths are the parent/current/changed proportions RenderBrowserView
 // is about to be called with.
 func changedWidth(totalWidth int, widths [3]int) int {
+	// Focus is irrelevant to the changed column's own width: the narrow tier
+	// renders a single full-width pane regardless of which one, so any
+	// focus value yields the same cells[0] there.
+	cells, _ := browserColumnCells(totalWidth, widths, BrowserFocusChanged)
 	switch {
 	case totalWidth >= wideTierWidth:
-		available := max(totalWidth-6, 0)
-		return distributeWidths(available, []int{widths[0], widths[1], widths[2]})[2]
+		return cells[2]
 	case totalWidth >= mediumTierWidth:
-		available := max(totalWidth-4, 0)
-		return distributeWidths(available, []int{widths[1], widths[2]})[1]
+		return cells[1]
 	default:
-		return max(totalWidth-2, 0)
+		return cells[0]
 	}
 }
 

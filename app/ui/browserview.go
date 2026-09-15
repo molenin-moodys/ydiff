@@ -23,6 +23,14 @@ const (
 	mediumTierWidth = 60
 )
 
+// minColumnWidth is the smallest cell width a drag will leave a Miller
+// column at, and the floor distributeBrowserWidths enforces on every
+// column's initial proportional split: enough room for a truncated entry
+// name plus its trailing "/" directory marker, so a dragged-thin (or
+// extreme-proportion) column still reads as a column rather than
+// degenerating into an unusable sliver.
+const minColumnWidth = 8
+
 // browserChromeRows is how many rows RenderBrowserView spends on something
 // other than a column's content: the path header at the top, each column
 // box's own top and bottom border, and the status bar. Pane height and the
@@ -138,8 +146,7 @@ func abbreviateHome(path string) string {
 }
 
 func (p BrowserViewParams) renderThreeColumns(ph int) string {
-	available := max(p.Width-6, 0) // 3 boxes x 2 border columns each
-	widths := distributeWidths(available, []int{p.Widths[0], p.Widths[1], p.Widths[2]})
+	widths, _ := browserColumnCells(p.Width, p.Widths, p.Focus)
 
 	left := p.renderParentColumn(widths[0], ph)
 	mid := p.renderCurrentColumn(widths[1], ph, p.Focus == BrowserFocusCurrent)
@@ -148,8 +155,7 @@ func (p BrowserViewParams) renderThreeColumns(ph int) string {
 }
 
 func (p BrowserViewParams) renderTwoColumns(ph int) string {
-	available := max(p.Width-4, 0) // 2 boxes x 2 border columns each
-	widths := distributeWidths(available, []int{p.Widths[1], p.Widths[2]})
+	widths, _ := browserColumnCells(p.Width, p.Widths, p.Focus)
 
 	mid := p.renderCurrentColumn(widths[0], ph, p.Focus == BrowserFocusCurrent)
 	right := p.renderChangedColumn(widths[1], ph, p.Focus == BrowserFocusChanged)
@@ -157,11 +163,37 @@ func (p BrowserViewParams) renderTwoColumns(ph int) string {
 }
 
 func (p BrowserViewParams) renderSingleColumn(ph int) string {
-	available := max(p.Width-2, 0) // 1 box
+	widths, _ := browserColumnCells(p.Width, p.Widths, p.Focus)
 	if p.Focus == BrowserFocusChanged {
-		return p.renderChangedColumn(available, ph, true)
+		return p.renderChangedColumn(widths[0], ph, true)
 	}
-	return p.renderCurrentColumn(available, ph, true)
+	return p.renderCurrentColumn(widths[0], ph, true)
+}
+
+// browserColumnCells returns the per-column cell widths for the tier `width`
+// falls into, along with the index into widths of the first column that
+// tier renders (0 wide, 1 medium, and for the narrow tier a single pane,
+// which one determined by focus). It is the single geometry source shared by
+// rendering (renderThreeColumns/renderTwoColumns/renderSingleColumn) and
+// mouse hit-testing (columnXRanges, dividerAt, resizeDividerTo in mouse.go,
+// changedWidth in root.go) — collapsing what used to be six independently
+// re-derived copies of the same tier/box-margin/distribute math so a click
+// can never land on a different pane than the one it visibly hit.
+func browserColumnCells(width int, widths [3]int, focus BrowserFocus) (cells []int, first int) {
+	switch {
+	case width >= wideTierWidth:
+		available := max(width-6, 0) // 3 boxes x 2 border columns each
+		return distributeBrowserWidths(available, []int{widths[0], widths[1], widths[2]}), 0
+	case width >= mediumTierWidth:
+		available := max(width-4, 0) // 2 boxes x 2 border columns each
+		return distributeBrowserWidths(available, []int{widths[1], widths[2]}), 1
+	default:
+		available := max(width-2, 0) // 1 box
+		if focus == BrowserFocusChanged {
+			return []int{available}, 2
+		}
+		return []int{available}, 1
+	}
 }
 
 // distributeWidths splits available columns among len(props) panes
@@ -199,6 +231,45 @@ func distributeWidths(available int, props []int) []int {
 		w := available * max(v, 0) / sum
 		out[i] = w
 		used += w
+	}
+	return out
+}
+
+// distributeBrowserWidths splits available among the browser's columns like
+// distributeWidths, then raises any column that landed below minColumnWidth
+// back up to it, taking the cells from the widest columns. A proportion set
+// that is extreme relative to the terminal (say 1,1,1000 at 100 columns)
+// would otherwise render a 2-cell column that can show nothing and, once
+// persisted, cannot be dragged back out of that state. When available cannot
+// even seat every column at minColumnWidth, there is nothing sensible to
+// enforce and the plain proportional split stands.
+//
+// The result is a fixed point: if every input cell is already >=
+// minColumnWidth and they sum to available, the output equals the input
+// unchanged — that is what keeps cell counts usable as proportions and what
+// makes a divider drag's round trip through distributeBrowserWidths stable.
+func distributeBrowserWidths(available int, props []int) []int {
+	out := distributeWidths(available, props)
+	if available < len(props)*minColumnWidth {
+		return out
+	}
+
+	deficit := 0
+	for i, w := range out {
+		if w < minColumnWidth {
+			deficit += minColumnWidth - w
+			out[i] = minColumnWidth
+		}
+	}
+	for deficit > 0 {
+		maxIdx := 0
+		for i, w := range out {
+			if w > out[maxIdx] {
+				maxIdx = i
+			}
+		}
+		out[maxIdx]--
+		deficit--
 	}
 	return out
 }
