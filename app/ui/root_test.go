@@ -318,3 +318,79 @@ func TestRootModel_EnterInChangedPane_OpensScopedReview(t *testing.T) {
 	require.Equal(t, ScreenReview, root.screen)
 	assert.Equal(t, []string{"b.txt"}, root.review.cfg.only)
 }
+
+// TestRootModel_BrowserFilter_TypedRunesNarrowTheQuery is the acceptance-review
+// defect-1 regression test: `/` opens the filter box, but typed characters
+// used to be silently discarded because no caller routed tea.KeyRunes to
+// Nav.FilterAppend. Driving the keys through RootModel.Update (the same path
+// a real keypress takes) must grow the query, not leave it permanently empty.
+func TestRootModel_BrowserFilter_TypedRunesNarrowTheQuery(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.txt"), []byte("x"), 0o600))
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+
+	updated, _ := root.Update(keyMsg('/'))
+	root = updated.(RootModel)
+	require.True(t, root.browser.nav.Filter().Editing(), "precondition: / opens the filter for editing")
+
+	updated, _ = root.Update(keyMsg('r'))
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('e'))
+	root = updated.(RootModel)
+
+	assert.Equal(t, "re", root.browser.nav.Filter().Query(),
+		"typed runes must append to the filter query through handleKey, not be discarded")
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	root = updated.(RootModel)
+	assert.Equal(t, "r", root.browser.nav.Filter().Query(), "backspace must remove the last rune of the query")
+}
+
+// TestRootModel_BrowserToggleHidden_RevealsDotfiles is the acceptance-review
+// defect-2 regression test: `.` is bound to ActionBrowserToggleHidden and
+// advertised in help, but used to be a no-op because Nav had no
+// ToggleHidden method and handleKey never called one. Driving `.` through
+// RootModel.Update must actually change what the listing contains.
+func TestRootModel_BrowserToggleHidden_RevealsDotfiles(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "visible.txt"), []byte("x"), 0o600))
+	nav := newTestNav(t, dir) // showHidden defaults to false
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+
+	names := func() []string {
+		var out []string
+		for _, e := range root.browser.nav.VisibleEntries() {
+			out = append(out, e.Name)
+		}
+		return out
+	}
+	require.NotContains(t, names(), ".hidden", "precondition: hidden file not shown by default")
+
+	updated, cmd := root.Update(keyMsg('.'))
+	root = updated.(RootModel)
+	for _, msg := range drainBatch(cmd) {
+		if lm, ok := msg.(browser.LoadedMsg); ok {
+			root.browser.nav.Apply(lm)
+		}
+	}
+
+	assert.Contains(t, names(), ".hidden", "toggling hidden must reveal dotfiles")
+	assert.Contains(t, names(), "visible.txt", "toggling hidden must not lose already-visible entries")
+
+	// toggling back off must hide it again
+	updated, cmd = root.Update(keyMsg('.'))
+	root = updated.(RootModel)
+	for _, msg := range drainBatch(cmd) {
+		if lm, ok := msg.(browser.LoadedMsg); ok {
+			root.browser.nav.Apply(lm)
+		}
+	}
+	assert.NotContains(t, names(), ".hidden", "toggling hidden again must hide dotfiles once more")
+}

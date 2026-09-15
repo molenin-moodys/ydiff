@@ -720,6 +720,40 @@ which is the exact shape `planning/scripts/launch-plan-review.sh:47` invokes. Ba
 starts the browser. `--browser-widths` rejects non-numeric, non-positive and wrong-count
 values with clear messages and accepts `1,2,3` as proportions.
 
+### ➕ Task 25a: Fix filter input and hidden-files toggle
+
+Fixes the two confirmed defects and two thin-test coverage holes from task 25's acceptance
+review (⚠️ Gap 1 and ⚠️ Gap 2 above), following TDD: a failing test was written and watched
+fail for each defect before the fix.
+
+- [x] add `TestRootModel_BrowserFilter_TypedRunesNarrowTheQuery` (`app/ui/root_test.go`),
+      driving `/` then typed runes and a backspace through `RootModel.Update`; watched it
+      fail with an empty query before the fix
+- [x] fix Gap 1: `browserScreen.handleKey` (`app/ui/root.go`) now routes `tea.KeyRunes` to
+      `Nav.FilterAppend` and `tea.KeyBackspace` to `Nav.FilterBackspace` whenever the filter
+      is being edited and `ResolveBrowser` returned the empty Action, before the action
+      switch runs; Enter/Esc still flow through the switch exactly as before
+- [x] add `TestNav_ToggleHidden_ChangesListingAndRestoresCursor` (`app/browser/nav_test.go`)
+      and `TestRootModel_BrowserToggleHidden_RevealsDotfiles` (`app/ui/root_test.go`),
+      driving `.` through `Nav` directly and through `RootModel.Update`; watched both fail
+      (dotfile never appeared) before the fix
+- [x] fix Gap 2: added `Nav.ToggleHidden()` (`app/browser/nav.go`) — flips `showHidden` and
+      re-issues `n.load()` for both columns; the currently selected entry's name is
+      remembered and `Nav.Apply` restores the cursor onto it by name once the reloaded
+      current-column listing arrives, instead of resetting to the top. Wired into
+      `browserScreen.handleKey`'s `ActionBrowserToggleHidden` case, which previously fell
+      through to a no-op `default:`
+- [x] fix thin test 3: `TestRenderBrowserView_InlineDirectoryError` (`app/ui/browserview_test.go`)
+      now uses a real `chmod 0o000` directory (skipped on Windows/root, mirroring
+      `app/browser/listing_test.go`'s existing fixture) instead of a merely-missing one, with
+      a `t.Cleanup` restoring permissions so `t.TempDir()` cleanup succeeds
+- [x] fix thin test 4: added explicit boundary sub-tests at 59/60/99/100 columns to
+      `TestRenderBrowserView_NarrowTerminalTiers` (`app/ui/browserview_test.go`); manually
+      verified by flipping `>= mediumTierWidth` to `>` in `app/ui/browserview.go` locally,
+      confirming the new 60-boundary sub-test fails, then reverting
+- [x] `go build ./...`, `go vet ./...` clean; `go test -race ./...` green except the
+      pre-known `TestGit_FileBlame_UsesIndexForStagedDiffs` environmental failure
+
 ### Task 26: [Final] Update documentation
 
 - [ ] update `README.md` with browser usage, the full key table, the narrow-terminal rules

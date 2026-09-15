@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -224,11 +225,30 @@ func TestRenderBrowserView_LoadingPlaceholder(t *testing.T) {
 	assert.Contains(t, plain, "loading", "a column whose read has been pending long enough shows a placeholder")
 }
 
+// TestRenderBrowserView_InlineDirectoryError uses a real permission-denied
+// directory (chmod 0o000), not merely a missing one: the design promises
+// that "a directory that cannot be read renders its error inline in the
+// column", and a missing-path fixture only proves the panic-free path for
+// ENOENT, not for EACCES — the two failures are not guaranteed to produce
+// the same renderable error shape.
 func TestRenderBrowserView_InlineDirectoryError(t *testing.T) {
-	base := t.TempDir()
-	missing := filepath.Join(base, "does-not-exist")
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits do not restrict directory reads on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores permission bits")
+	}
 
-	nav := newLoadedNav(t, missing)
+	base := t.TempDir()
+	locked := filepath.Join(base, "locked")
+	require.NoError(t, os.Mkdir(locked, 0o755))
+	require.NoError(t, os.Chmod(locked, 0o000))
+	// restore permissions so t.TempDir() cleanup can remove the directory afterward.
+	t.Cleanup(func() {
+		_ = os.Chmod(locked, 0o700)
+	})
+
+	nav := newLoadedNav(t, locked)
 
 	p := baseParams(t, base)
 	p.Nav = nav
@@ -271,6 +291,30 @@ func TestRenderBrowserView_NarrowTerminalTiers(t *testing.T) {
 		assert.Contains(t, out, "changed - uncommitted", "changed column present")
 	})
 
+	// TestRenderBrowserView_NarrowTerminalTiers's boundary sub-tests below
+	// pin the exact tier edges (59/60/99/100) the acceptance review flagged:
+	// the surrounding sub-tests only ever probed 100 and mid-range widths
+	// (80, 50), so flipping browserview.go's `>= mediumTierWidth` to `>`
+	// (or the equivalent off-by-one at wideTierWidth) would pass every one
+	// of them undetected.
+	t.Run("at exactly 100 columns renders all three panes (wide-tier boundary)", func(t *testing.T) {
+		p := baseParams(t, fx.currentDir)
+		p.Width = wideTierWidth
+		out := ansi.Strip(RenderBrowserView(p))
+		assert.Contains(t, out, "sibling", "100 must already be in the wide tier: parent column present")
+		assert.Contains(t, out, "readme.md", "current column present")
+		assert.Contains(t, out, "changed - uncommitted", "changed column present")
+	})
+
+	t.Run("at exactly 99 columns drops the parent column (just below wide-tier boundary)", func(t *testing.T) {
+		p := baseParams(t, fx.currentDir)
+		p.Width = wideTierWidth - 1
+		out := ansi.Strip(RenderBrowserView(p))
+		assert.NotContains(t, out, "sibling", "99 must already be in the medium tier: parent column gone")
+		assert.Contains(t, out, "readme.md", "current column still shown")
+		assert.Contains(t, out, "changed - uncommitted", "changed column still shown")
+	})
+
 	t.Run("60-99 columns drops the parent column", func(t *testing.T) {
 		p := baseParams(t, fx.currentDir)
 		p.Width = 80
@@ -278,6 +322,24 @@ func TestRenderBrowserView_NarrowTerminalTiers(t *testing.T) {
 		assert.NotContains(t, out, "sibling", "parent column's sibling entry is gone")
 		assert.Contains(t, out, "readme.md", "current column still shown")
 		assert.Contains(t, out, "changed - uncommitted", "changed column still shown")
+	})
+
+	t.Run("at exactly 60 columns still renders parent+current+changed (medium-tier boundary)", func(t *testing.T) {
+		p := baseParams(t, fx.currentDir)
+		p.Width = mediumTierWidth
+		out := ansi.Strip(RenderBrowserView(p))
+		assert.NotContains(t, out, "sibling", "60 is still the medium tier: parent column gone")
+		assert.Contains(t, out, "readme.md", "current column present")
+		assert.Contains(t, out, "changed - uncommitted", "changed column present")
+	})
+
+	t.Run("at exactly 59 columns renders only the focused pane (just below medium-tier boundary)", func(t *testing.T) {
+		p := baseParams(t, fx.currentDir)
+		p.Width = mediumTierWidth - 1
+		p.Focus = BrowserFocusCurrent
+		out := ansi.Strip(RenderBrowserView(p))
+		assert.Contains(t, out, "readme.md", "59 must already be in the narrow tier: focused pane present")
+		assert.NotContains(t, out, "changed - uncommitted", "59 must already be in the narrow tier: unfocused pane gone")
 	})
 
 	t.Run("below 60 columns renders only the focused pane", func(t *testing.T) {

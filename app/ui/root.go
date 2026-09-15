@@ -386,7 +386,26 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return b.handleBrowserOverlayKey(msg)
 	}
 	filterActive := b.nav.Filter().Editing()
-	switch b.km.ResolveBrowser(msg.String(), filterActive) {
+	action := b.km.ResolveBrowser(msg.String(), filterActive)
+
+	// while the filter is being typed, ResolveBrowser deliberately returns
+	// the empty Action for every key except Enter/Esc (see its doc comment)
+	// so ordinary letters reach here as literal filter input instead of
+	// commands. Route them into the filter query before the action switch
+	// below, which only ever sees Enter/Esc/empty while editing.
+	if filterActive && action == "" {
+		switch msg.Type {
+		case tea.KeyRunes:
+			for _, r := range msg.Runes {
+				b.nav.FilterAppend(r)
+			}
+		case tea.KeyBackspace:
+			b.nav.FilterBackspace()
+		}
+		return b, nil
+	}
+
+	switch action {
 	case keymap.ActionBrowserUp:
 		b.moveCursor(-1)
 	case keymap.ActionBrowserDown:
@@ -406,6 +425,8 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.nav.FilterStart()
 	case keymap.ActionBrowserDismiss:
 		b.nav.FilterCancel()
+	case keymap.ActionBrowserToggleHidden:
+		return b, b.nav.ToggleHidden()
 	case keymap.ActionBrowserToggleScope:
 		if b.changed != nil {
 			return b, b.changed.ToggleScope(b.nav.Path())
@@ -425,9 +446,9 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			b.overlay.OpenHelp(b.buildBrowserHelpSpec())
 		}
 	default:
-		// browser_review, browser_quit, browser_enter's changed-file case
-		// (all intercepted by RootModel), and hidden-file toggle (no pane
-		// implements it yet): no-op here.
+		// browser_review, browser_quit, and browser_enter's changed-file
+		// case are all intercepted by RootModel before this is reached:
+		// no-op here.
 	}
 	return b, nil
 }

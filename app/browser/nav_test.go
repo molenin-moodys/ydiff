@@ -166,6 +166,45 @@ func TestNav_EnterOnVanishedDirectory(t *testing.T) {
 	assert.Error(t, nav.Current().Err)
 }
 
+// TestNav_ToggleHidden_ChangesListingAndRestoresCursor verifies that
+// ToggleHidden actually changes what the listing contains (the acceptance
+// review's defect 2: the field existed but nothing ever flipped it) and that
+// the cursor lands back on the same entry by name rather than resetting to
+// the top.
+func TestNav_ToggleHidden_ChangesListingAndRestoresCursor(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, ".hidden-dir"))
+	mustMkdir(t, filepath.Join(root, "visible-a"))
+	mustMkdir(t, filepath.Join(root, "visible-b"))
+
+	nav, cmd := NewNav(root, false, nil)
+	runAndApply(t, nav, cmd)
+
+	names := func() []string {
+		var out []string
+		for _, e := range nav.VisibleEntries() {
+			out = append(out, e.Name)
+		}
+		return out
+	}
+	require.NotContains(t, names(), ".hidden-dir", "precondition: hidden by default")
+
+	nav.SetCursor(indexOf(t, nav.Current(), "visible-b"))
+
+	toggleCmd := nav.ToggleHidden()
+	require.NotNil(t, toggleCmd)
+	runAndApply(t, nav, toggleCmd)
+
+	assert.Contains(t, names(), ".hidden-dir", "toggling on must reveal the dotfile directory")
+	assert.Equal(t, "visible-b", names()[nav.Cursor()], "cursor must stay on the previously selected entry")
+
+	toggleCmd = nav.ToggleHidden()
+	runAndApply(t, nav, toggleCmd)
+
+	assert.NotContains(t, names(), ".hidden-dir", "toggling off must hide the dotfile directory again")
+	assert.Equal(t, "visible-b", names()[nav.Cursor()], "cursor must still track the same entry after toggling back off")
+}
+
 // TestNav_ParentColumnDerivedFromCurrentPath verifies that the parent column
 // always reflects filepath.Dir(current path), independent of what the
 // current column shows.

@@ -30,6 +30,13 @@ type Nav struct {
 	parent  *Column // listing for filepath.Dir(path); has no cursor of its own
 
 	filter Filter // substring filter over current's listing only; never applies to parent
+
+	// restoreCursorName is the name of the entry the cursor should land back
+	// on once the current column's next load result for n.path arrives,
+	// consulted (and cleared) by Apply. Set by ToggleHidden, since flipping
+	// showHidden reorders/resizes the listing asynchronously — Apply is the
+	// first point at which the new listing actually exists to search.
+	restoreCursorName string
 }
 
 // NewNav creates navigation state rooted at start and returns the tea.Cmd
@@ -74,6 +81,18 @@ func (n *Nav) Parent() *Column { return n.parent }
 func (n *Nav) Apply(msg LoadedMsg) bool {
 	appliedCurrent := n.current.Apply(msg)
 	appliedParent := n.parent.Apply(msg)
+
+	if appliedCurrent && n.restoreCursorName != "" && msg.Path == n.path {
+		name := n.restoreCursorName
+		n.restoreCursorName = ""
+		for i, e := range n.VisibleEntries() {
+			if e.Name == name {
+				n.SetCursor(i)
+				break
+			}
+		}
+	}
+
 	return appliedCurrent || appliedParent
 }
 
@@ -242,6 +261,26 @@ func indexByName(entries []Entry, name string) int {
 		}
 	}
 	return 0
+}
+
+// ToggleHidden flips whether dotfiles are included in the listing and
+// re-issues the loads for both the current and parent columns so the new
+// setting takes effect immediately. The cursor is preserved by name where
+// possible: the currently selected entry's name is remembered and, once the
+// reloaded listing for the current column arrives, Apply looks it up and
+// restores the cursor onto it rather than leaving the cursor reset to the
+// top (or pointing at whatever now happens to sit at the old index). If the
+// selected entry was itself a dotfile now being hidden, the name is not
+// found and the cursor falls back to wherever SetCursor's clamping puts it.
+func (n *Nav) ToggleHidden() tea.Cmd {
+	entries := n.VisibleEntries()
+	if n.cursor >= 0 && n.cursor < len(entries) {
+		n.restoreCursorName = entries[n.cursor].Name
+	}
+
+	n.showHidden = !n.showHidden
+
+	return n.load()
 }
 
 // Up moves to the parent directory, if any. Going up from the filesystem
