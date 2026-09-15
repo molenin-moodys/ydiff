@@ -1,4 +1,4 @@
-# revdiff Architecture
+# ydiff Architecture
 
 TUI for reviewing diffs, files, and documents with inline annotations, built with bubbletea.
 
@@ -329,7 +329,7 @@ User presses 'a' on diff line
           content == ""  → cancelAnnotation (preserve existing annotation)
           otherwise      → saveComment(content, fileLevel, line, type)
   → re-render shows annotation (multi-line aware) below diff line
-  → 'O' (flush_output, requires --output): store.WriteFile(path) → atomic write, revdiff stays open (annotate → flush → hand to agent → 'R' reload loop)
+  → 'O' (flush_output, requires --output): store.WriteFile(path) → atomic write, ydiff stays open (annotate → flush → hand to agent → 'R' reload loop)
   → on quit: store.FormatOutput() → structured output to stdout/file (file branch uses store.WriteFile)
   → (optional) history.Save() → markdown to ~/.config/revdiff/history/ (best-effort warnings only)
   → if --exit-code-on-annotations is enabled and output is non-empty: exit 10
@@ -349,11 +349,11 @@ User presses 'e' in diff pane
           err == nil and worktree refresh policy
               → reloadCurrentFile() reloads current file only
           err == nil and no-refresh policy
-              → return to revdiff without reloading
+              → return to ydiff without reloading
 ```
 
 Source line navigation is best effort for all worktree-backed reviews.
-Staged and ref reviews still request the focused line when revdiff can derive
+Staged and ref reviews still request the focused line when ydiff can derive
 one from the loaded diff,
 but clean editor exits from staged and ref reviews do not reload the displayed
 diff.

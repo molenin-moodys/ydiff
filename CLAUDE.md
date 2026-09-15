@@ -1,14 +1,16 @@
-# revdiff
+# ydiff
 
 TUI for reviewing diffs, files, and documents with inline annotations, built with bubbletea.
+ydiff is a fork of [revdiff](https://github.com/umputun/revdiff) — see `UPSTREAM.md` and
+`LICENSE-revdiff`.
 
 **Architecture**: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design, data flows, interfaces, and design decisions.
 
 ## Commands
-- Build: `make build` (output: `.bin/revdiff`)
+- Build: `make build` (output: `.bin/ydiff`)
 - Test: `make test` (race detector + coverage, excludes mocks)
 - Lint: `make lint` or `golangci-lint run`
-- Format: `make fmt` or `~/.claude/format.sh`
+- Format: `make fmt` or `gofmt -w .`
 - Generate mocks: `go generate ./...`
 - Vendor after adding deps: `go mod vendor`
 
@@ -49,44 +51,6 @@ TUI for reviewing diffs, files, and documents with inline annotations, built wit
 - `--keys` overrides keybindings path, `--dump-keys` prints effective bindings
 - **CLI flag description style is minimal and atomic** — match `--staged` ("show staged changes") / `--blame` ("show blame gutter"). Never include "at startup", "on startup", "(mirrors X toggle)", "(same state as X)", or cross-references to runtime toggle keys in the struct tag description, README/docs.html/plugin config.md table rows, godoc, or usage example comments. The flag description states what the flag does; users discover runtime toggles via the keybindings table or status-bar legend. This rule applies to every surface that describes a flag.
 - **Mode-gating pattern for CLI flags with mode-dependent applicability**: when a flag is meaningful in some modes (working-tree, single-ref, `--staged`) but not others (two-ref, `--stdin`, `--compare-old/--compare-new`), gate it at the composition root via a method on `options` that returns the resolved bool, parallel to `options.ref()`. Example: `options.startupUntracked()` returns `false` in two-ref mode (`a b` or `a..b`) so working-tree state doesn't leak into historical diffs. `main.go` then wires `ShowUntracked: opts.startupUntracked()` into `ModelConfig`. The Model takes the resolved bool — it does NOT re-derive from CLI options or refs. Composition-root gating composes cleanly with the Model's own capability gate (e.g. `cfg.ShowUntracked && cfg.LoadUntracked != nil`) which handles the stdin/compare modes where the loader function is nil.
-
-## Website
-- Static site in `site/` (index.html, docs.html, style.css), deployed to revdiff.com via Cloudflare Pages
-- Cloudflare Pages strips `.html` and 308-redirects `/docs.html` → `/docs`. Canonical tags, `og:url`, and `sitemap.xml` entries for documentation pages must use the extension-less URL (`/docs`), not the source filename (`/docs.html`), or Google indexes a redirect and tanks CTR
-- `site/docs.html` must stay in sync with README.md - when adding features, flags, keybindings, or modes, update both
-- `site/index.html` landing page should reflect major new features in the features grid and plugin sections
-- **CRITICAL: After each release, update the version badge in `site/index.html`** (search for `hero-badge` div) and `softwareVersion` in JSON-LD
-
-## Claude Code Plugin
-- Plugin lives at `.claude-plugin/` with `plugin.json`, `marketplace.json`, and `skills/`
-- Skills path in `plugin.json` is relative to repo root, not to `.claude-plugin/`
-- **CRITICAL: Version bumps happen at release only — never per-PR or per-change.** Do NOT prompt to bump `plugin.json` / `marketplace.json` after a plugin file change; the bump is done as part of the release process.
-- When bumping at release, update version in both `plugin.json` and `marketplace.json`
-- **CRITICAL: Defer plugin version bumps when the change depends on a new binary feature.** If a plugin/launcher change relies on a `revdiff` binary feature, flag, env var, or exit code that is not yet in a tagged release, do NOT bump `plugin.json` / `marketplace.json` / `package.json` on the feature branch. The plugin (marketplace) and the binary (brew / `go install`) version independently — bumping the plugin early ships an updated launcher to users still running an old binary, causing a hard mismatch (e.g. the launcher passes an unknown flag, the old binary exits 1, every plugin-triggered review fails). Bump plugin/package versions as part of the binary version release, after the binary is tagged.
-- Reference docs at `.claude-plugin/skills/revdiff/references/` — keep in sync with README.md:
-  - `install.md` — installation methods and plugin setup
-  - `config.md` — options, colors, chroma styles
-  - `usage.md` — examples, key bindings, output format
-- **Adding a new CLI flag requires SKILL.md updates, not just reference docs.** `references/config.md` and `references/usage.md` document the flag's *existence*; `SKILL.md` teaches AI agents *when* to pass it during automatic launches (e.g. "pass `--untracked` when the recent change likely created new untracked files"). Without a SKILL.md entry, AI agents using the plugin will not know to pass the flag even though it's documented. Apply the same update to `plugins/codex/skills/revdiff/SKILL.md` (keep in sync with `.claude-plugin/skills/revdiff/SKILL.md`) and to `plugins/pi/skills/revdiff/SKILL.md` (which lists user-facing command examples). The launcher scripts (`launch-revdiff.sh`) pass `"$@"` through, so no script changes are needed beyond updating the usage-comment header for documentation parity.
-- **Launcher override chain**: both Claude plugins resolve their launcher script via `resolve-launcher.sh` through `user → bundled` layers (first executable wins). User layer is `${CLAUDE_PLUGIN_DATA}/scripts/<launcher>`. There is **no project-level (`.claude/...`) layer by design** — the planning hook fires automatically on `ExitPlanMode` in any repo, and a repo-controlled executable layer would let an untrusted repo run arbitrary code on routine Claude actions. The diff-review resolver keeps the same two-layer shape for symmetry (single mental model, shared resolver). The override chain is **Claude-only** — pi (no `CLAUDE_PLUGIN_DATA` in runtime) and codex (no plugin-data path) ignore it; codex users edit `~/.codex/skills/revdiff/scripts/launch-revdiff.sh` directly to customize.
-- **Launcher env vars don't reach the tmux/zellij popup**: `launch-revdiff.sh` spawns the revdiff process in a fresh shell inside the multiplexer popup that does NOT inherit the parent shell's environment, so env-var config set before the launch is dropped (e.g. `REVDIFF_THEME=gruvbox launch-revdiff.sh HEAD~10` does not apply the theme). Pass it as a CLI flag instead: `launch-revdiff.sh --theme gruvbox HEAD~10`. Applies to any env-var-configurable option launched through the overlay.
-- **Testing locally**: `claude --plugin-dir .claude-plugin` loads the diff-review skill from this checkout without going through the marketplace; `claude --plugin-dir plugins/revdiff-planning` does the same for the planning hook. Use `/reload-plugins` to pick up file edits mid-session.
-
-## Codex Skills
-- Codex skills live at `plugins/codex/skills/` — two skills: `revdiff` (diff review) and `revdiff-plan` (plan review via last Codex assistant message)
-- Install is a skills-only copy to `~/.codex/skills/<name>/` — codex does NOT scan `~/.codex/plugins/`, that path is reserved for plugins synced from `github.com/openai/plugins`
-- No plugin manifest or marketplace envelope — the `.codex-plugin/` / `.agents/` layout was non-conformant with codex's actual format and removed
-- Script path resolution in SKILL.md falls back to `${CODEX_HOME:-$HOME/.codex}/skills/<skill>/scripts` when not running inside the revdiff repo
-- Scripts are copies from `.claude-plugin/skills/revdiff/scripts/`, not symlinks — each has a source comment at top
-- `detect-ref.sh` dispatches by VCS (`detect_git` / `detect_hg` / `detect_jj`) via `command -v` probes (jj → git → hg, matching `DetectVCS` precedence); git path stays byte-identical to the pre-refactor output. `read-latest-history.sh` uses the same VCS probe order for repo-root resolution.
-- Codex has no hook system — plan review is manual via `/revdiff-plan`
-
-## Pi Plugin
-- Pi package defined in root `package.json`, extensions and skills in `plugins/pi/`
-- Pi review path is direct-terminal only: `/revdiff [args]` suspends pi, runs the `revdiff` binary directly, and sends captured annotations to the agent immediately. There is no Pi overlay mode, pending annotation widget/panel, `/revdiff-rerun`, `/revdiff-results`, `/revdiff-apply`, `/revdiff-clear`, or default post-edit reminder command.
-- Pi ships its own copy of `detect-ref.sh` at `plugins/pi/scripts/detect-ref.sh` (source-of-truth is `.claude-plugin/skills/revdiff/scripts/detect-ref.sh` — keep in sync, same pattern as the codex copy). The pi extension resolves the script relative to its own plugin root, never via `.claude-plugin/`; the pi package must stay installable standalone with no Claude plugin files present. Do not re-add `launch-revdiff.sh` to the Pi package surface unless the workflow is explicitly changed.
-- **CRITICAL: Version bumps happen at release only — never per-PR or per-change.** Do NOT prompt to bump `package.json` after a pi plugin file change; the bump is done as part of the release process.
-- Version in `package.json` is independently versioned (does not track the project's git tags)
 
 ## Gotchas
 - Project uses vendoring - run `go mod vendor` after adding/updating dependencies

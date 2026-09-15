@@ -23,7 +23,7 @@ lint:
 	golangci-lint run
 
 fmt:
-	~/.claude/format.sh
+	gofmt -w .
 
 race:
 	go test -race -timeout=60s ./...
@@ -32,10 +32,7 @@ version:
 	@echo "branch: $(BRANCH), hash: $(HASH), timestamp: $(TIMESTAMP)"
 	@echo "revision: $(REV)"
 
-site:
-	@echo "site assets are in site/ directory"
-
 validate-themes:
 	go test -run TestGalleryThemes_validate ./app/theme/
 
-.PHONY: build test lint fmt race version site validate-themes
+.PHONY: build test lint fmt race version validate-themes

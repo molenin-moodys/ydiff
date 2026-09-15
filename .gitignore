@@ -5,7 +5,7 @@
 *.so
 *.dylib
 .bin/
-/revdiff
+/ydiff
 
 # test files
 *.test
@@ -27,9 +27,6 @@ Thumbs.db
 # build artifacts
 dist/
 
-# node
-node_modules/
-
 # local configuration
 .env
 .env.local
@@ -45,4 +42,3 @@ __pycache__/
 
 # ralphex progress logs
 .ralphex/progress/
-.pi/

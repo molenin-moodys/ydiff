@@ -270,17 +270,17 @@ default theme `revdiff` -> `ydiff`.
 - Modify: `CLAUDE.md`, `Makefile`, `.github/workflows/release.yml`, `.gitignore`, `docs/ARCHITECTURE.md`
 - Delete: `app/plugin_exit_code_test.go` (asserts on the deleted plugin paths)
 
-- [ ] delete `plugins/` and `.claude-plugin/` — a Claude Code marketplace advertising
+- [x] delete `plugins/` and `.claude-plugin/` — a Claude Code marketplace advertising
       revdiff installation has no business in this repository
-- [ ] delete `app/plugin_exit_code_test.go`, which asserts on those exact paths, and confirm
+- [x] delete `app/plugin_exit_code_test.go`, which asserts on those exact paths, and confirm
       the exit-code behaviour it covered is instead covered by task 24
-- [ ] delete `site/`, `flake.nix`, `flake.lock`, `package.json`, `CHANGELOG.md`, upstream's
+- [x] delete `site/`, `flake.nix`, `flake.lock`, `package.json`, `CHANGELOG.md`, upstream's
       `docs/plans/` (it would land beside this very plan) and `.zed/tasks.json`
-- [ ] disable the release workflow's `push: tags: v*` trigger so a stray upstream tag cannot
+- [x] disable the release workflow's `push: tags: v*` trigger so a stray upstream tag cannot
       fire a release with a secret this repository does not have
-- [ ] adapt `CLAUDE.md` and `docs/ARCHITECTURE.md` to ydiff; fix the `Makefile` `fmt` target,
+- [x] adapt `CLAUDE.md` and `docs/ARCHITECTURE.md` to ydiff; fix the `Makefile` `fmt` target,
       which hardcodes `~/.claude/format.sh`, a path personal to the upstream author
-- [ ] run `go test ./...` and confirm CI config parses — suite green before task 4
+- [x] run `go test ./...` and confirm CI config parses — suite green before task 4
 
 ### Task 4: Remove Mercurial and Jujutsu support, keep the VCS interface
 
