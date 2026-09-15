@@ -503,7 +503,7 @@ func TestRootModel_Browser_FOpensFavoritesOverlay(t *testing.T) {
 
 	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	root = updated.(RootModel)
-	updated, _ = root.Update(keyMsg('F'))
+	updated, _ = root.Update(keyMsg('f'))
 	root = updated.(RootModel)
 
 	require.True(t, root.browser.overlay.Active())
@@ -522,7 +522,7 @@ func TestRootModel_Browser_FavoritesEnterNavigatesAndCloses(t *testing.T) {
 	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
 		WithFavoritesService(svc)
 
-	updated, _ := root.Update(keyMsg('F'))
+	updated, _ := root.Update(keyMsg('f'))
 	root = updated.(RootModel)
 	require.True(t, root.browser.overlay.Active())
 
@@ -547,7 +547,7 @@ func TestRootModel_Browser_FavoritesDeleteRemovesAndKeepsOpen(t *testing.T) {
 	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
 		WithFavoritesService(svc)
 
-	updated, _ := root.Update(keyMsg('F'))
+	updated, _ := root.Update(keyMsg('f'))
 	root = updated.(RootModel)
 
 	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyDelete})
@@ -569,7 +569,7 @@ func TestRootModel_Browser_FavoritesNilServiceOpensEmptyPopup(t *testing.T) {
 
 	var updated tea.Model
 	assert.NotPanics(t, func() {
-		updated, _ = root.Update(keyMsg('F'))
+		updated, _ = root.Update(keyMsg('f'))
 	})
 	root = updated.(RootModel)
 	require.True(t, root.browser.overlay.Active(), "F must still open the popup, empty, with a nil service")
@@ -586,7 +586,7 @@ func TestRootModel_Browser_FavoritesListErrorSetsHintNotPanic(t *testing.T) {
 
 	var updated tea.Model
 	assert.NotPanics(t, func() {
-		updated, _ = root.Update(keyMsg('F'))
+		updated, _ = root.Update(keyMsg('f'))
 	})
 	root = updated.(RootModel)
 	assert.Contains(t, root.browser.hint, "boom")

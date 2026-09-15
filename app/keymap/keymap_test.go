@@ -1217,7 +1217,7 @@ func TestDefaultBrowser_allExpectedBindings(t *testing.T) {
 		{"q", ActionBrowserQuit},
 		{"?", ActionBrowserHelp},
 		{"ctrl+f", ActionBrowserToggleFavorite},
-		{"F", ActionBrowserFavorites},
+		{"f", ActionBrowserFavorites},
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.action, km.ResolveBrowser(tt.key, false),

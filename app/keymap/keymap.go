@@ -388,7 +388,7 @@ func defaultBrowserBindings() map[string]Action {
 		"q":      ActionBrowserQuit,
 		"?":      ActionBrowserHelp,
 		"ctrl+f": ActionBrowserToggleFavorite,
-		"F":      ActionBrowserFavorites,
+		"f":      ActionBrowserFavorites,
 	}
 }
 
