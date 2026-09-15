@@ -95,7 +95,25 @@ func main() {
 	}
 }
 
-func run(opts options) (int, error) {
+// entryModelResult bundles everything buildEntryModel constructs: the model
+// tea.Program should run, the ProgramOptions run() would use for a real
+// terminal, and the bookkeeping (gitRoot, workDir) only needed after the
+// program exits (history saving). It is a single seam between "build the
+// composition" and "drive it with a tea.Program", extracted so a test can
+// substitute the terminal I/O half (scripted keystrokes, no renderer) while
+// exercising the exact same model construction, dispatch, and annotation
+// store that a real invocation uses — see app/e2e_contract_test.go, which
+// runs the real model in-process instead of a built binary because Bubble
+// Tea needs a TTY and a piped stdin cannot deliver keystrokes to it.
+type entryModelResult struct {
+	entryModel     tea.Model
+	programOptions []tea.ProgramOption
+	tty            *os.File // non-nil only in --stdin mode; caller must Close it after the program exits
+	gitRoot        string
+	workDir        string
+}
+
+func buildEntryModel(opts options) (entryModelResult, error) {
 	// force lipgloss to truecolor when colors are enabled. revdiff's raw-ANSI
 	// helpers (style.ansiColor) always emit truecolor, but lipgloss respects
 	// the termenv-detected profile, which can downgrade to ANSI256 / ANSI in
@@ -129,7 +147,7 @@ func run(opts options) (int, error) {
 	}
 	description, err := resolveDescription(opts)
 	if err != nil {
-		return 0, err
+		return entryModelResult{}, err
 	}
 
 	// decideRoute is pure over opts: it never depends on being inside a
@@ -138,23 +156,23 @@ func run(opts options) (int, error) {
 	// be tolerated (browser route) or reported (review route).
 	decision := decideRoute(opts)
 
+	var tty *os.File
 	switch {
 	case opts.compareAbsOld != "":
 		renderer = diff.NewCompareReader(opts.compareAbsOld, opts.compareAbsNew)
 		workDir = filepath.Dir(opts.compareAbsNew)
 	case opts.Stdin:
-		var tty *os.File
-		renderer, tty, err = prepareStdinMode(opts, os.Stdin)
-		if err != nil {
-			return 0, err
+		var stdinErr error
+		renderer, tty, stdinErr = prepareStdinMode(opts, os.Stdin)
+		if stdinErr != nil {
+			return entryModelResult{}, stdinErr
 		}
-		defer tty.Close()
 		programOptions = append(programOptions, tea.WithInput(tty))
 	default:
 		var setup vcsSetup
 		setup, err = vcsSetupForRoute(opts, decision)
 		if err != nil {
-			return 0, err
+			return entryModelResult{}, err
 		}
 		renderer = setup.renderer
 		gitRoot = setup.gitRoot
@@ -168,7 +186,7 @@ func run(opts options) (int, error) {
 
 	if opts.Annotations != "" {
 		if perr := preloadAnnotations(opts.Annotations, store, renderer, opts.ref(), opts.Staged, untrackedFn, untrackedRenamesFn, workDir, os.Stderr); perr != nil {
-			return 0, perr
+			return entryModelResult{}, perr
 		}
 	}
 
@@ -248,7 +266,7 @@ func run(opts options) (int, error) {
 		},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("create model: %w", err)
+		return entryModelResult{}, fmt.Errorf("create model: %w", err)
 	}
 
 	// entryModel is what the tea.Program actually runs: NewRootReview for
@@ -265,7 +283,32 @@ func run(opts options) (int, error) {
 		entryModel = ui.NewRootReview(model)
 	}
 
-	p := tea.NewProgram(entryModel, programOptions...)
+	return entryModelResult{
+		entryModel:     entryModel,
+		programOptions: programOptions,
+		tty:            tty,
+		gitRoot:        gitRoot,
+		workDir:        workDir,
+	}, nil
+}
+
+// run drives buildEntryModel's composition with a real tea.Program against
+// the real terminal: it is the only caller that needs the full ProgramOption
+// set (alt screen, mouse tracking, --stdin's tty) and the only place annotation
+// output actually reaches disk/stdout for a live invocation. Tests exercise
+// buildEntryModel directly and substitute their own ProgramOptions instead
+// (see app/e2e_contract_test.go) rather than calling run, since a real
+// terminal is not available in a test process.
+func run(opts options) (int, error) {
+	build, err := buildEntryModel(opts)
+	if err != nil {
+		return 0, err
+	}
+	if build.tty != nil {
+		defer build.tty.Close()
+	}
+
+	p := tea.NewProgram(build.entryModel, build.programOptions...)
 	finalModel, err := p.Run()
 	if err != nil {
 		return 0, fmt.Errorf("TUI error: %w", err)
@@ -284,7 +327,7 @@ func run(opts options) (int, error) {
 		return 0, nil
 	}
 
-	saveHistory(histReq{opts: opts, annotations: output, gitRoot: gitRoot, workDir: workDir, files: root.Store().Files()})
+	saveHistory(histReq{opts: opts, annotations: output, gitRoot: build.gitRoot, workDir: build.workDir, files: root.Store().Files()})
 
 	return writeAnnotationOutput(annotationOutputReq{opts: opts, output: output, stdout: os.Stdout})
 }

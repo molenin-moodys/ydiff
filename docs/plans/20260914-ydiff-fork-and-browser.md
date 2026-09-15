@@ -625,17 +625,17 @@ Bubble Tea needs a TTY, and upstream's own `plugin_exit_code_test.go` sidesteppe
 fake shell script rather than the real TUI. A PTY dependency is not in `go.mod` and the repo
 vendors, so this test runs the real model in-process instead.*
 
-- [ ] build the program with `tea.NewProgram(model, tea.WithInput(scriptedInput),
+- [x] build the program with `tea.NewProgram(model, tea.WithInput(scriptedInput),
       tea.WithoutRenderer())`, feeding keystrokes that open a file, annotate a line and quit
-- [ ] assert the `--output` file contains exactly the expected markdown records, headers
+- [x] assert the `--output` file contains exactly the expected markdown records, headers
       included
-- [ ] assert exit code 10 with `--exit-code-on-annotations` and 0 without annotations,
+- [x] assert exit code 10 with `--exit-code-on-annotations` and 0 without annotations,
       covering what the deleted `plugin_exit_code_test.go` used to cover
-- [ ] assert stdout carries the annotations when no `--output` is given, since that is the
+- [x] assert stdout carries the annotations when no `--output` is given, since that is the
       path an agent reads
-- [ ] **do not** guard the test behind a build tag — it runs in the normal suite, because a
+- [x] **do not** guard the test behind a build tag — it runs in the normal suite, because a
       guarded test CI never enables protects nothing
-- [ ] run `go test -race ./...` — **phase 5 complete**
+- [x] run `go test -race ./...` — **phase 5 complete**
 
 ### Task 25: Verify acceptance criteria
 
