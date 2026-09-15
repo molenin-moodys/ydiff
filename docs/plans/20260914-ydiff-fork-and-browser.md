@@ -347,14 +347,14 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/gitstate/gitstate.go`, `app/gitstate/repo.go`, `app/gitstate/repo_test.go`
 
-- [ ] write tests first: repository found by walking up from a nested directory; root
+- [x] write tests first: repository found by walking up from a nested directory; root
       reported correctly; a directory outside any repository reported as such; a directory
       that vanished mid-call returning an error rather than panicking
-- [ ] implement `Resolve(dir string) (*Repo, error)` walking up for `.git`, confirmed with
+- [x] implement `Resolve(dir string) (*Repo, error)` walking up for `.git`, confirmed with
       `git rev-parse --show-toplevel`
-- [ ] define the exported types: `Repo`, `Scope`, `ChangedFile`, `Status`
-- [ ] write tests for worktrees and submodules resolving as ordinary repositories
-- [ ] run `go test -race ./app/gitstate/...` — must pass before task 8
+- [x] define the exported types: `Repo`, `Scope`, `ChangedFile`, `Status`
+- [x] write tests for worktrees and submodules resolving as ordinary repositories
+- [x] run `go test -race ./app/gitstate/...` — must pass before task 8
 
 ### Task 8: gitstate — uncommitted scope
 
