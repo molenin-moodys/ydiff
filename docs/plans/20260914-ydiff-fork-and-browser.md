@@ -389,14 +389,14 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/gitstate/branch.go`, `app/gitstate/branch_test.go`
 
-- [ ] write tests first against a repository with a real fork point: commits on the branch
+- [x] write tests first against a repository with a real fork point: commits on the branch
       after diverging appear; commits made on the default branch after the fork point do not
-- [ ] implement parsing of `git diff --name-status <base>...HEAD` into `[]ChangedFile`
-- [ ] handle rename entries (`R100 old new`) by recording both paths
-- [ ] write a test for a branch with no commits since the fork point returning an empty list
-- [ ] write a test asserting an unresolved base yields the "base not found" error rather than
+- [x] implement parsing of `git diff --name-status <base>...HEAD` into `[]ChangedFile`
+- [x] handle rename entries (`R100 old new`) by recording both paths
+- [x] write a test for a branch with no commits since the fork point returning an empty list
+- [x] write a test asserting an unresolved base yields the "base not found" error rather than
       an empty list, so the UI can tell the two apart
-- [ ] run `go test -race ./app/gitstate/...` — must pass before task 11
+- [x] run `go test -race ./app/gitstate/...` — must pass before task 11
 
 ### Task 11: gitstate — caching and invalidation
 
