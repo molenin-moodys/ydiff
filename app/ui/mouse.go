@@ -559,16 +559,18 @@ func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
 // hitTest classifies a browser-screen screen coordinate into a
 // browserHitZone plus the entry row within that pane (0-based, before
 // scroll-offset translation; -1 when the zone has no per-row meaning, e.g.
-// a column header). Row 0 of every column box is its top border, row 1 is
-// always the header line (directory name, or "changed - <scope>" for the
-// changed pane), and entry rows start at row 2 — mirroring diffTopRow's
+// the changed pane's scope header). Row 0 is the path header and row 1 is
+// every box's top border. The current column no longer has a header row of
+// its own (task 1 dropped the per-column directory name), so its content
+// starts at row 2; the changed pane still has its "changed - <scope>" header
+// at row 2, so its content starts at row 3 — mirroring diffTopRow's
 // border+header accounting in the review screen's own hitTest.
 func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 	if b.width <= 0 || b.height <= 0 || x < 0 || y < 0 || x >= b.width || y >= b.height {
 		return browserHitNone, -1
 	}
-	// Row 0 is the path header and row 1 each box's top border, so a
-	// column's own header sits at row 2 and its content runs from row 3.
+	// Row 0 is the path header and row 1 every box's top border, so box
+	// content starts at row 2.
 	ph := b.paneContentHeight()
 	if y <= 1 || y > ph+1 {
 		return browserHitNone, -1 // path header, top border, or bottom border/status bar and beyond
@@ -579,10 +581,7 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 
 	switch {
 	case inRange(currentX):
-		if y == 2 {
-			return browserHitNone, -1 // header row: directory name, not clickable
-		}
-		return browserHitCurrent, y - 3
+		return browserHitCurrent, y - 2
 	case inRange(changedX):
 		if y == 2 {
 			return browserHitChangedHeader, -1
@@ -673,7 +672,7 @@ func (b browserScreen) clickBrowser(x, y int) (tea.Model, tea.Cmd) {
 // falls out of that for free, exactly like pressing Enter would.
 func (b browserScreen) clickCurrentEntry(row int) (tea.Model, tea.Cmd) {
 	entries := b.nav.VisibleEntries()
-	body := max(b.paneContentHeight()-1, 0)
+	body := b.paneContentHeight()
 	offset, _ := paneScrollWindow(len(entries), body, b.nav.Cursor())
 	idx := offset + row
 	if idx < 0 || idx >= len(entries) {

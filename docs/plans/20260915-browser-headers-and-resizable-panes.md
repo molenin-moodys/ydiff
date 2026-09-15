@@ -224,27 +224,27 @@ wins on the next launch, as with every other config-file key.
 - Modify: `app/ui/root.go`
 - Modify: `app/ui/browsermouse_test.go`
 
-- [ ] in `browserScreen.View` (`app/ui/root.go`) replace the hardcoded
+- [x] in `browserScreen.View` (`app/ui/root.go`) replace the hardcoded
       `max(b.height-3, 1)` with `b.paneContentHeight()` so the changed pane's
       body height is derived from the same `browserChromeRows` constant the
       view and the hit test use; keep `bodyHeight := max(ph-1, 0)` for the
       changed pane's own header row
-- [ ] in `browserScreen.hitTest`, map the current column's content rows from
+- [x] in `browserScreen.hitTest`, map the current column's content rows from
       `y-2` (they no longer sit below a header) and keep the changed pane at
       `y == 2` → `browserHitChangedHeader`, `y > 2` → `browserHitChanged` with
       index `y-3`
-- [ ] in `clickCurrentEntry`, pass the full `b.paneContentHeight()` to
+- [x] in `clickCurrentEntry`, pass the full `b.paneContentHeight()` to
       `paneScrollWindow` instead of `max(b.paneContentHeight()-1, 0)`; leave
       `clickChangedEntry`'s `-1` alone (its header is still there)
-- [ ] write a test that a click on the current column's first content row
+- [x] write a test that a click on the current column's first content row
       (`y == 2`) selects the first visible entry
-- [ ] write a test that a click on the changed pane at `y == 2` still toggles
+- [x] write a test that a click on the changed pane at `y == 2` still toggles
       the scope and at `y == 3` selects its first file
-- [ ] write a test that a scrolled current column maps a click to the right
+- [x] write a test that a scrolled current column maps a click to the right
       absolute index (cursor far enough down that `paneScrollWindow` offsets)
-- [ ] update the existing coordinate expectations in
+- [x] update the existing coordinate expectations in
       `app/ui/browsermouse_test.go` that the row shift invalidates
-- [ ] run `go test ./app/ui/...` — must pass before task 3
+- [x] run `go test ./app/ui/...` — must pass before task 3
 
 ### Task 3: Divider hit-testing and the width-recompute arithmetic
 

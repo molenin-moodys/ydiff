@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,7 +61,8 @@ func TestBrowserMouse_ClickCurrentEntry_SelectsFile(t *testing.T) {
 	currentX, _ := root.browser.columnXRanges()
 	require.NotEqual(t, -1, currentX[0], "precondition: wide tier renders the current column")
 
-	// row 2 (y) is the first entry row (row 0 = box top border, row 1 = header)
+	// row 2 (y) is the first content row (row 0 = path header, row 1 = box top
+	// border) — the current column no longer has its own header row.
 	updated, _ := root.Update(leftClick(currentX[0]+1, 2))
 	root = updated.(RootModel)
 
@@ -80,7 +82,7 @@ func TestBrowserMouse_ClickDirectoryEntry_EntersIt(t *testing.T) {
 	currentX, _ := root.browser.columnXRanges()
 	require.NotEqual(t, -1, currentX[0])
 
-	updated, cmd := root.Update(leftClick(currentX[0]+1, 3)) // row 3: the column's first entry
+	updated, cmd := root.Update(leftClick(currentX[0]+1, 2)) // row 2: the column's first entry
 	root = updated.(RootModel)
 	require.NotNil(t, cmd, "entering a directory issues a load command")
 	for _, msg := range drainBatch(cmd) {
@@ -283,9 +285,9 @@ func TestBrowserScreen_NoMouseFlag_GatesAtProgramLevel(t *testing.T) {
 	assert.Equal(t, before.nav.Cursor(), root.browser.nav.Cursor())
 }
 
-// TestBrowserHitTest_OutsideContentRows_NoZone guards the border/header row
-// exclusions (row 0 = top border, and the header row for each pane) so a
-// click just outside the entry rows is never misattributed to an entry.
+// TestBrowserHitTest_OutsideContentRows_NoZone guards the path-header/border
+// row exclusions so a click just outside the entry rows is never
+// misattributed to an entry.
 func TestBrowserHitTest_OutsideContentRows_NoZone(t *testing.T) {
 	dir := t.TempDir()
 	root := wideBrowserRoot(t, dir)
@@ -293,9 +295,73 @@ func TestBrowserHitTest_OutsideContentRows_NoZone(t *testing.T) {
 
 	currentX, _ := b.columnXRanges()
 	zone, row := b.hitTest(currentX[0]+1, 0)
-	assert.Equal(t, browserHitNone, zone, "row 0 is the box top border, never clickable")
+	assert.Equal(t, browserHitNone, zone, "row 0 is the path header, never clickable")
 	assert.Equal(t, -1, row)
 
 	zone, _ = b.hitTest(currentX[0]+1, 1)
-	assert.Equal(t, browserHitNone, zone, "row 1 in the current column is the directory-name header, not clickable")
+	assert.Equal(t, browserHitNone, zone, "row 1 is every box's top border, not clickable")
+}
+
+// TestBrowserHitTest_CurrentColumn_FirstContentRow_HasNoHeader verifies the
+// current column's content now starts at row 2 — task 1 dropped its
+// directory-name header, so unlike the changed pane there is no header row
+// to skip.
+func TestBrowserHitTest_CurrentColumn_FirstContentRow_HasNoHeader(t *testing.T) {
+	dir := t.TempDir()
+	root := wideBrowserRoot(t, dir)
+	b := root.browser
+
+	currentX, _ := b.columnXRanges()
+	zone, row := b.hitTest(currentX[0]+1, 2)
+	assert.Equal(t, browserHitCurrent, zone, "row 2 is the current column's first content row")
+	assert.Equal(t, 0, row)
+}
+
+// TestBrowserHitTest_ChangedPane_HeaderThenContent verifies the changed
+// pane's header/content split is unchanged by task 1: row 2 is still the
+// "changed - <scope>" header, row 3 is still the first entry.
+func TestBrowserHitTest_ChangedPane_HeaderThenContent(t *testing.T) {
+	dir := t.TempDir()
+	root := wideBrowserRoot(t, dir)
+	b := root.browser
+
+	_, changedX := b.columnXRanges()
+	zone, row := b.hitTest(changedX[0]+1, 2)
+	assert.Equal(t, browserHitChangedHeader, zone)
+	assert.Equal(t, -1, row)
+
+	zone, row = b.hitTest(changedX[0]+1, 3)
+	assert.Equal(t, browserHitChanged, zone)
+	assert.Equal(t, 0, row)
+}
+
+// TestBrowserMouse_ScrolledCurrentColumn_ClickMapsToAbsoluteIndex verifies a
+// click on the current column maps to the correct absolute VisibleEntries
+// index once the cursor (and therefore paneScrollWindow's offset) has moved
+// the visible window away from the top of the list.
+func TestBrowserMouse_ScrolledCurrentColumn_ClickMapsToAbsoluteIndex(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 30 {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d.txt", i)), []byte("x"), 0o600))
+	}
+	root := wideBrowserRoot(t, dir)
+
+	// small height so the visible window is well below the full entry count,
+	// forcing paneScrollWindow to offset.
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 120, Height: 12})
+	root = updated.(RootModel)
+
+	entries := root.browser.nav.VisibleEntries()
+	require.Greater(t, len(entries), 15, "precondition: enough entries to force scrolling")
+
+	root.browser.nav.SetCursor(len(entries) - 1) // jump to the last entry so the window scrolls to the bottom
+	ph := root.browser.paneContentHeight()
+	offset, _ := paneScrollWindow(len(entries), ph, root.browser.nav.Cursor())
+	require.Greater(t, offset, 0, "precondition: the visible window has actually scrolled")
+
+	currentX, _ := root.browser.columnXRanges()
+	updated, _ = root.Update(leftClick(currentX[0]+1, 2)) // first visible content row
+	root = updated.(RootModel)
+
+	assert.Equal(t, offset, root.browser.nav.Cursor(), "click on the visible window's first row selects the offset entry")
 }

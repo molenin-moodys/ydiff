@@ -592,8 +592,8 @@ var defaultBrowserWidths = [3]int{15, 35, 50}
 // bar (RenderBrowserView, task 19), with the changed-files pane's content
 // pre-rendered at the exact width that view will place it into.
 func (b browserScreen) View() string {
-	ph := max(b.height-3, 1)   // status bar row + column box borders, see RenderBrowserView
-	bodyHeight := max(ph-1, 0) // minus the changed pane's own header line, mirroring renderChangedColumn
+	ph := b.paneContentHeight() // derived from browserChromeRows, mirroring RenderBrowserView exactly
+	bodyHeight := max(ph-1, 0)  // minus the changed pane's own header line, mirroring renderChangedColumn
 
 	widths := b.effectiveWidths()
 
