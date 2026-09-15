@@ -417,14 +417,14 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/browser/browser.go`, `app/browser/listing.go`, `app/browser/listing_test.go`
 
-- [ ] write tests first against real trees in `t.TempDir()`: directories before files, both
+- [x] write tests first against real trees in `t.TempDir()`: directories before files, both
       case-insensitively alphabetical; hidden entries excluded by default, included when toggled
-- [ ] write tests for symlinks: a symlink to a directory is enterable and flagged; a broken
+- [x] write tests for symlinks: a symlink to a directory is enterable and flagged; a broken
       symlink is flagged and not enterable
-- [ ] write the test that keeps the app alive: an unreadable directory yields an entry-level
+- [x] write the test that keeps the app alive: an unreadable directory yields an entry-level
       error the caller can render, never a panic or process exit
-- [ ] implement `Entry`, `Listing` and `Read(dir string, showHidden bool) (Listing, error)`
-- [ ] run `go test -race ./app/browser/...` — must pass before task 13
+- [x] implement `Entry`, `Listing` and `Read(dir string, showHidden bool) (Listing, error)`
+- [x] run `go test -race ./app/browser/...` — must pass before task 13
 
 ### Task 13: browser — asynchronous loading
 
