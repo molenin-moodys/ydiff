@@ -77,12 +77,19 @@ func NewRootReview(review Model) RootModel {
 // (task 20); gitCache may be nil to disable both — the pane then renders
 // its own "not a git repository"-style state without ever shelling out.
 // resolver themes the browser screen's three columns and changed-files
-// pane. A nil km falls back to keymap.Default().
+// pane. A nil km falls back to keymap.Default(). widths are the
+// parent/current/changed column proportions (task 22's --browser-widths
+// flag); a zero value falls back to defaultBrowserWidths (15/35/50).
 func NewRootBrowser(
 	nav *browser.Nav, km *keymap.Keymap, review Model, gitCache *gitstate.Cache, scope gitstate.Scope, resolver style.Resolver,
+	widths ...[3]int,
 ) RootModel {
 	if km == nil {
 		km = keymap.Default()
+	}
+	w := defaultBrowserWidths
+	if len(widths) > 0 && widths[0] != ([3]int{}) {
+		w = widths[0]
 	}
 	return RootModel{
 		screen:     ScreenBrowser,
@@ -93,6 +100,7 @@ func NewRootBrowser(
 			resolver: resolver,
 			changed:  newChangedPane(gitCache, scope),
 			overlay:  overlay.NewManager(),
+			widths:   w,
 		},
 		review:   review,
 		gitCache: gitCache,
@@ -303,7 +311,21 @@ type browserScreen struct {
 	resolver style.Resolver
 	overlay  *overlay.Manager
 
+	// widths are the parent/current/changed column proportions (task 22's
+	// --browser-widths flag). A zero value means "use defaultBrowserWidths".
+	widths [3]int
+
 	width, height int
+}
+
+// effectiveWidths returns b.widths, falling back to defaultBrowserWidths
+// when it is unset (the zero value), so screens built without going through
+// NewRootBrowser's widths parameter still render at the documented default.
+func (b browserScreen) effectiveWidths() [3]int {
+	if b.widths == ([3]int{}) {
+		return defaultBrowserWidths
+	}
+	return b.widths
 }
 
 // Init issues the changed-files pane's initial load for the browser's
@@ -507,11 +529,13 @@ func (b browserScreen) View() string {
 	ph := max(b.height-3, 1)   // status bar row + column box borders, see RenderBrowserView
 	bodyHeight := max(ph-1, 0) // minus the changed pane's own header line, mirroring renderChangedColumn
 
+	widths := b.effectiveWidths()
+
 	var content string
 	var count int
 	var scopeLabel, branch string
 	if b.changed != nil {
-		cw := changedWidth(b.width, defaultBrowserWidths)
+		cw := changedWidth(b.width, widths)
 		content = b.changed.Render(b.resolver, cw, bodyHeight, b.focus == BrowserFocusChanged)
 		count = b.changed.count()
 		scopeLabel = string(b.changed.scope)
@@ -520,7 +544,7 @@ func (b browserScreen) View() string {
 
 	out := RenderBrowserView(BrowserViewParams{
 		Nav:            b.nav,
-		Widths:         defaultBrowserWidths,
+		Widths:         widths,
 		Width:          b.width,
 		Height:         b.height,
 		Resolver:       b.resolver,

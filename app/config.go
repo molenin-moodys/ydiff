@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
@@ -65,6 +66,18 @@ type options struct {
 	DumpConfig            bool     `long:"dump-config" no-ini:"true" description:"print default config to stdout and exit"`
 	Version               bool     `short:"V" long:"version" no-ini:"true" description:"show version info"`
 
+	BaseBranch string `long:"base-branch" ini-name:"base-branch" env:"YDIFF_BASE_BRANCH" description:"default branch used to find the fork point for branch-scope base resolution (e.g. origin/main); overrides auto-detection"`
+	// BaseBranchRepos is a per-repository override for BaseBranch, keyed by
+	// the repository's absolute root path. It exists only in the config
+	// file (and, incidentally, as a repeatable CLI flag via go-flags' map
+	// support) so a monorepo whose base is always e.g. origin/develop can be
+	// pinned once without exporting an env var or flag for every invocation.
+	// --base-branch (flag, env, or the plain config default) always takes
+	// precedence over this map — see resolveBaseBranch.
+	BaseBranchRepos map[string]string `long:"base-branch-repo" ini-name:"base-branch-repo" description:"per-repository base branch override: repo-root-path:branch (repeatable)"`
+	Browser         bool              `long:"browser" ini-name:"browser" env:"YDIFF_BROWSER" description:"force the browser screen even when diff arguments are present"`
+	BrowserWidths   string            `long:"browser-widths" ini-name:"browser-widths" env:"YDIFF_BROWSER_WIDTHS" default:"15,35,50" description:"parent,current,changed column proportions for the browser screen (normalised, need not sum to 100)"`
+
 	Colors struct {
 		Accent       string `long:"color-accent"      ini-name:"color-accent"      env:"YDIFF_COLOR_ACCENT"      default:"#D5895F" description:"active pane borders and directory names"`
 		Border       string `long:"color-border"      ini-name:"color-border"      env:"YDIFF_COLOR_BORDER"      default:"#585858" description:"inactive pane borders"`
@@ -93,6 +106,7 @@ type options struct {
 
 	compareAbsOld string
 	compareAbsNew string
+	browserWidths [3]int
 }
 
 // ref returns the combined ref string from positional args.
@@ -179,7 +193,61 @@ func parseArgs(args []string) (options, error) {
 	opts.compareAbsOld = absOld
 	opts.compareAbsNew = absNew
 
+	widths, err := parseBrowserWidths(opts.BrowserWidths)
+	if err != nil {
+		return options{}, err
+	}
+	opts.browserWidths = widths
+
 	return opts, nil
+}
+
+// resolveBaseBranch returns the base branch to use for branch-scope base
+// resolution when the current repository's root is repoRoot. --base-branch
+// (set via flag, env, or the plain config-file default) always wins; only
+// when it is empty does a per-repository BaseBranchRepos entry for repoRoot
+// apply. Returns "" when neither is set, leaving auto-detection to the
+// caller.
+func (o options) resolveBaseBranch(repoRoot string) string {
+	if o.BaseBranch != "" {
+		return o.BaseBranch
+	}
+	if repoRoot == "" {
+		return ""
+	}
+	return o.BaseBranchRepos[repoRoot]
+}
+
+// ResolvedBrowserWidths returns the parsed, normalised parent/current/changed
+// column proportions for the browser screen, as validated by parseArgs.
+func (o options) ResolvedBrowserWidths() [3]int {
+	return o.browserWidths
+}
+
+// parseBrowserWidths parses and validates the --browser-widths value: exactly
+// three comma-separated positive integers, e.g. "15,35,50". They are treated
+// as proportions and normalised by the browser view (app/ui), not required to
+// sum to 100 — "1,2,3" is exactly as valid as "15,35,50".
+func parseBrowserWidths(s string) ([3]int, error) {
+	parts := strings.Split(s, ",")
+	if len(parts) != 3 {
+		return [3]int{}, fmt.Errorf("--browser-widths must have exactly 3 comma-separated values (parent,current,changed), got %d: %q", len(parts), s)
+	}
+
+	var widths [3]int
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return [3]int{}, fmt.Errorf("--browser-widths value %q is not a number: %q", part, s)
+		}
+		if n <= 0 {
+			return [3]int{}, fmt.Errorf("--browser-widths value %q must be positive: %q", part, s)
+		}
+		widths[i] = n
+	}
+
+	return widths, nil
 }
 
 // dumpConfig writes the current config with defaults to the given writer.

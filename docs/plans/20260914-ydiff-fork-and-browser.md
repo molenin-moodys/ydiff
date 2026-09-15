@@ -589,15 +589,15 @@ not depend on flag parsing existing yet.*
 - Create: `app/config_browser_test.go`
 - Modify: `completions/*`
 
-- [ ] write tests first for `--base-branch`, `--browser` and `--browser-widths` in flag,
+- [x] write tests first for `--base-branch`, `--browser` and `--browser-widths` in flag,
       config-file and `YDIFF_*` forms, with the flag taking precedence
-- [ ] implement the three flags, defaulting widths to `15,35,50` and **normalising them as
+- [x] implement the three flags, defaulting widths to `15,35,50` and **normalising them as
       proportions** rather than requiring a sum of 100
-- [ ] implement per-repository `base-branch` in the config file
-- [ ] wire the parsed widths into the view built in task 19
-- [ ] write validation tests: non-numeric, non-positive or wrong-count widths are rejected
+- [x] implement per-repository `base-branch` in the config file
+- [x] wire the parsed widths into the view built in task 19
+- [x] write validation tests: non-numeric, non-positive or wrong-count widths are rejected
       with a clear message rather than rendering a broken layout
-- [ ] update shell completions; run `go test -race ./...` — must pass before task 23
+- [x] update shell completions; run `go test -race ./...` — must pass before task 23
 
 ### Task 23: Startup routing
 

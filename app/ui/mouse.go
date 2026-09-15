@@ -530,7 +530,7 @@ func (b browserScreen) paneContentHeight() int {
 // mediumTierWidth).
 func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
 	notRendered := [2]int{-1, -1}
-	widths := defaultBrowserWidths
+	widths := b.effectiveWidths()
 
 	switch {
 	case b.width >= wideTierWidth:
