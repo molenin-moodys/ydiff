@@ -361,15 +361,15 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/gitstate/status.go`, `app/gitstate/status_test.go`
 
-- [ ] write tests first against a `git init` repository in `t.TempDir()` covering each
+- [x] write tests first against a `git init` repository in `t.TempDir()` covering each
       status: modified, added, deleted, renamed, untracked, staged-plus-modified
-- [ ] implement parsing of `git status --porcelain=v2 --untracked-files=normal` into
+- [x] implement parsing of `git status --porcelain=v2 --untracked-files=normal` into
       `[]ChangedFile`
-- [ ] handle paths with spaces, quoting and non-ASCII characters
-- [ ] write a test for a clean repository returning an empty list, not an error
-- [ ] write a test for a malformed porcelain line producing a clear error rather than a
+- [x] handle paths with spaces, quoting and non-ASCII characters
+- [x] write a test for a clean repository returning an empty list, not an error
+- [x] write a test for a malformed porcelain line producing a clear error rather than a
       silent skip
-- [ ] run `go test -race ./app/gitstate/...` — must pass before task 9
+- [x] run `go test -race ./app/gitstate/...` — must pass before task 9
 
 ### Task 9: gitstate — base branch resolution
 
