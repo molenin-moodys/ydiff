@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -1000,8 +1002,12 @@ func (b browserScreen) buildBrowserHelpSpec() overlay.HelpSpec {
 		if len(keys) == 0 {
 			continue
 		}
+		display := make([]string, len(keys))
+		for i, k := range keys {
+			display[i] = displayBrowserKey(k)
+		}
 		entries = append(entries, overlay.HelpEntry{
-			Keys:        strings.Join(keys, " / "),
+			Keys:        strings.Join(display, " / "),
 			Description: e.desc,
 		})
 	}
@@ -1010,4 +1016,20 @@ func (b browserScreen) buildBrowserHelpSpec() overlay.HelpSpec {
 		{Title: "Browser", Entries: entries},
 		{Title: "Mouse", Entries: browserMouseHelpEntries},
 	}}
+}
+
+// displayBrowserKey formats a bound key string for display in the browser's
+// help overlay. A bare single uppercase letter (e.g. "T") is bubbletea's raw
+// representation of Shift+<letter> for a printable ASCII key — unlike
+// Ctrl/Alt, there is no separate "shift+" modifier prefix, since Shift is
+// already baked into the character. Left as-is, that reads as an arbitrary
+// capital rather than "hold Shift"; spelling it out as "shift+t" makes the
+// implicit modifier visible. Every other key string (arrows, "tab", "esc",
+// "ctrl+f", lowercase letters, punctuation) passes through unchanged.
+func displayBrowserKey(key string) string {
+	r, size := utf8.DecodeRuneInString(key)
+	if size != len(key) || !unicode.IsUpper(r) {
+		return key
+	}
+	return "shift+" + strings.ToLower(key)
 }
