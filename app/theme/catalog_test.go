@@ -419,7 +419,7 @@ func Test_initBundled_createsDirAndFiles(t *testing.T) {
 
 	names, err := NewCatalog(dir).list()
 	require.NoError(t, err)
-	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "revdiff", "solarized-dark"}, names)
+	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "ydiff"}, names)
 
 	// verify files are non-empty
 	for _, name := range names {
@@ -510,7 +510,7 @@ func Test_initNames_notInGallery(t *testing.T) {
 func Test_bundledNames(t *testing.T) {
 	names, err := NewCatalog("").bundledNames()
 	require.NoError(t, err)
-	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "revdiff", "solarized-dark"}, names)
+	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "ydiff"}, names)
 }
 
 func TestBundledThemes_parseCorrectly(t *testing.T) {
@@ -827,7 +827,7 @@ func Test_gallery(t *testing.T) {
 	assert.GreaterOrEqual(t, len(gallery), 5, "gallery should have at least 5 bundled themes")
 
 	// verify all bundled themes are present and marked
-	for _, name := range []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "revdiff", "solarized-dark"} {
+	for _, name := range []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "ydiff"} {
 		th, ok := gallery[name]
 		require.True(t, ok, "gallery should contain %q", name)
 		assert.True(t, th.Bundled, "%q should be marked bundled", name)

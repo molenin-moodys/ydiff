@@ -1,6 +1,6 @@
 # Contributing Themes
 
-Community-contributed color themes for revdiff. Each file in `gallery/` is a complete theme that ships with the binary and can be installed by users.
+Community-contributed color themes for ydiff. Each file in `gallery/` is a complete theme that ships with the binary and can be installed by users.
 
 ## Theme Format
 
@@ -74,7 +74,7 @@ Gallery themes must include all required color keys. Optional keys are `color-cu
 
 ### Chroma Style
 
-`chroma-style` sets the syntax highlighting palette. Run `revdiff --dump-config` to see available styles, or browse [chroma styles](https://xyproto.github.io/splash/docs/). Pick one that complements your theme's background colors.
+`chroma-style` sets the syntax highlighting palette. Run `ydiff --dump-config` to see available styles, or browse [chroma styles](https://xyproto.github.io/splash/docs/). Pick one that complements your theme's background colors.
 
 ## Creating a Theme
 
@@ -82,13 +82,13 @@ The fastest way to start:
 
 ```bash
 # dump current colors as a theme file
-revdiff --dump-theme > themes/gallery/my-theme
+ydiff --dump-theme > themes/gallery/my-theme
 
 # edit the file — update metadata, adjust colors
 $EDITOR themes/gallery/my-theme
 
 # preview your theme on a sample diff
-revdiff --theme my-theme
+ydiff --theme my-theme
 ```
 
 ### Tips
@@ -120,20 +120,20 @@ Users can install themes from the gallery or from local files:
 
 ```bash
 # list all available themes (gallery + installed)
-revdiff --list-themes
+ydiff --list-themes
 
 # install a gallery theme by name
-revdiff --install-theme tokyo-night
+ydiff --install-theme tokyo-night
 
 # install a local theme file (path with /)
-revdiff --install-theme ./my-theme
-revdiff --install-theme ~/themes/my-theme
+ydiff --install-theme ./my-theme
+ydiff --install-theme ~/themes/my-theme
 
 # install all gallery themes at once
-revdiff --init-all-themes
+ydiff --init-all-themes
 
 # use an installed theme
-revdiff --theme tokyo-night
+ydiff --theme tokyo-night
 ```
 
-Local file install validates the theme (format, colors, required keys) before copying it to `~/.config/revdiff/themes/`.
+Local file install validates the theme (format, colors, required keys) before copying it to `~/.config/ydiff/themes/`.

@@ -25,11 +25,11 @@ type Params struct {
 
 // Service manages review history persistence.
 type Service struct {
-	baseDir string // base history directory, empty = default (~/.config/revdiff/history/)
+	baseDir string // base history directory, empty = default (~/.config/ydiff/history/)
 }
 
 // New creates a history service with the given base directory.
-// if baseDir is empty, defaults to ~/.config/revdiff/history/.
+// if baseDir is empty, defaults to ~/.config/ydiff/history/.
 func New(baseDir string) *Service {
 	return &Service{baseDir: baseDir}
 }
@@ -83,7 +83,7 @@ func (s *Service) Save(p Params) {
 }
 
 // historyDir returns the directory for saving history files.
-// uses s.baseDir if set, otherwise ~/.config/revdiff/history/, with repo basename appended.
+// uses s.baseDir if set, otherwise ~/.config/ydiff/history/, with repo basename appended.
 func (s *Service) historyDir(p Params) string {
 	base := s.baseDir
 	if base == "" {
@@ -91,7 +91,7 @@ func (s *Service) historyDir(p Params) string {
 		if err != nil {
 			return ""
 		}
-		base = filepath.Join(home, ".config", "revdiff", "history")
+		base = filepath.Join(home, ".config", "ydiff", "history")
 	}
 
 	subdir := "unknown"

@@ -1,4 +1,4 @@
-// Package theme provides theme file parsing and serialization for revdiff color palettes.
+// Package theme provides theme file parsing and serialization for ydiff color palettes.
 // Theme files use INI format with comment-based metadata (# name: ..., # description: ...).
 package theme
 
@@ -11,7 +11,7 @@ import (
 )
 
 // defaultThemeName is the name of the built-in default theme.
-const defaultThemeName = "revdiff"
+const defaultThemeName = "ydiff"
 
 // colorKeys is the ordered list of all 23 recognized color keys matching ini-name tags.
 var colorKeys = []string{

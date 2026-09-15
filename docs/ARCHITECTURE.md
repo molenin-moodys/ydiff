@@ -110,7 +110,7 @@ Central package. Single `Model` struct implements bubbletea's `Model` interface.
 | `editor.go` | `$EDITOR` handoffs for annotation temp-file editing and source-file opening: `openEditor()` / `openSourceEditor()` wrap `app/editor.Editor` in `tea.ExecProcess`, capture target state, route completion, and refresh the current file after a clean source-editor exit |
 | `themeselect.go` | Theme selector operations: open, preview, confirm, apply (via injected `ThemeCatalog`) |
 | `search.go` | Search input handling, match computation, navigation |
-| `mouse.go` | Mouse event routing: `handleMouse` dispatch, `hitTest` pane classification (`hitZone`), wheel/left-click helpers (`clickTree`, `clickDiff`), layout helpers (`statusBarHeight`, `diffTopRow`, `treeTopRow`). Diff-pane wheel events defer both the cursor pin and the `SetContent(renderDiff())` call via a single in-flight `tea.Tick(wheelRenderDelay)` debounce (issue #179) — `wheelState.tickInFlight` ensures one tick at a time across an entire burst (subsequent wheels just bump `gen`); stale ticks reschedule, matching ticks flush. `flushWheelPending()` is called from `handleWheelDebounce`, `handleKey`, `handleResize`, and `handleBlameLoaded` (any path that runs `syncViewportToCursor` or reads `m.nav.diffCursor` must flush first). Mouse tracking is enabled program-wide via `tea.WithMouseCellMotion()` in `app/main.go` unless `--no-mouse` / `REVDIFF_NO_MOUSE` is set |
+| `mouse.go` | Mouse event routing: `handleMouse` dispatch, `hitTest` pane classification (`hitZone`), wheel/left-click helpers (`clickTree`, `clickDiff`), layout helpers (`statusBarHeight`, `diffTopRow`, `treeTopRow`). Diff-pane wheel events defer both the cursor pin and the `SetContent(renderDiff())` call via a single in-flight `tea.Tick(wheelRenderDelay)` debounce (issue #179) — `wheelState.tickInFlight` ensures one tick at a time across an entire burst (subsequent wheels just bump `gen`); stale ticks reschedule, matching ticks flush. `flushWheelPending()` is called from `handleWheelDebounce`, `handleKey`, `handleResize`, and `handleBlameLoaded` (any path that runs `syncViewportToCursor` or reads `m.nav.diffCursor` must flush first). Mouse tracking is enabled program-wide via `tea.WithMouseCellMotion()` in `app/main.go` unless `--no-mouse` / `YDIFF_NO_MOUSE` is set |
 
 Each source file has a matching `_test.go`.
 
@@ -195,7 +195,7 @@ File layout:
 - `theme.go` — `Theme` struct, `Dump`, package-level vars (`colorKeys`, `optionalColorKeys`)
 - `catalog.go` — `Catalog` struct, `NewCatalog`, all catalog methods (discovery, loading, installation, gallery)
 
-Bundled themes: revdiff, catppuccin-mocha, catppuccin-latte, dracula, gruvbox, nord, solarized-dark. Community themes live in `themes/gallery/`.
+Bundled themes: ydiff, catppuccin-mocha, catppuccin-latte, dracula, gruvbox, nord, solarized-dark. Community themes live in `themes/gallery/`.
 
 23 color keys mapped via `colorFieldPtrs()` in `app/themes.go` — single source of truth for color key to struct field mapping.
 
@@ -215,7 +215,7 @@ Consumed by `app/ui` via the `ExternalEditor` interface (defined in `app/ui/edit
 
 ### app/history/ — session auto-save
 
-`Save(Params)` writes review session as markdown to `~/.config/revdiff/history/`. Includes header, annotations, and git diff for annotated files.
+`Save(Params)` writes review session as markdown to `~/.config/ydiff/history/`. Includes header, annotations, and git diff for annotated files.
 
 ## Key Interfaces
 
@@ -331,7 +331,7 @@ User presses 'a' on diff line
   → re-render shows annotation (multi-line aware) below diff line
   → 'O' (flush_output, requires --output): store.WriteFile(path) → atomic write, ydiff stays open (annotate → flush → hand to agent → 'R' reload loop)
   → on quit: store.FormatOutput() → structured output to stdout/file (file branch uses store.WriteFile)
-  → (optional) history.Save() → markdown to ~/.config/revdiff/history/ (best-effort warnings only)
+  → (optional) history.Save() → markdown to ~/.config/ydiff/history/ (best-effort warnings only)
   → if --exit-code-on-annotations is enabled and output is non-empty: exit 10
 ```
 
@@ -390,10 +390,10 @@ User presses '?' / '@' / 'T' / 'i'
 
 **Precedence**: CLI flags > env vars > config file > built-in defaults
 
-- **Config file**: `~/.config/revdiff/config` (INI format via go-flags IniParser)
-- **Theme files**: `~/.config/revdiff/themes/` (auto-created on first run)
-- **Keybindings**: `~/.config/revdiff/keybindings` (`map`/`unmap` format)
-- **History**: `~/.config/revdiff/history/` (auto-save dir)
+- **Config file**: `~/.config/ydiff/config` (INI format via go-flags IniParser)
+- **Theme files**: `~/.config/ydiff/themes/` (auto-created on first run)
+- **Keybindings**: `~/.config/ydiff/keybindings` (`map`/`unmap` format)
+- **History**: `~/.config/ydiff/history/` (auto-save dir)
 
 Theme precedence: `--theme` overwrites all 23 color fields + chroma-style, ignoring `--color-*` flags or env vars. Applied via `applyTheme()` in `app/themes.go` which directly overwrites `opts.Colors.*` fields after `parseArgs()`.
 

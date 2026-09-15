@@ -1,4 +1,4 @@
-// Package themes embeds the gallery of theme files for revdiff.
+// Package themes embeds the gallery of theme files for ydiff.
 // Theme files live in gallery/ and are accessible via the FS variable.
 package themes
 

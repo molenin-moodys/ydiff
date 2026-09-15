@@ -54,7 +54,7 @@ func main() {
 	}
 
 	if opts.DumpKeys {
-		km := keymap.LoadOrDefault(resolveFlagPath(os.Args[1:], "keys", "REVDIFF_KEYS", defaultKeysPath))
+		km := keymap.LoadOrDefault(resolveFlagPath(os.Args[1:], "keys", "YDIFF_KEYS", defaultKeysPath))
 		if err := km.Dump(os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -174,7 +174,7 @@ func run(opts options) (int, error) {
 	}
 
 	themesDir := defaultThemesDir()
-	configPath := resolveFlagPath(os.Args[1:], "config", "REVDIFF_CONFIG", defaultConfigPath)
+	configPath := resolveFlagPath(os.Args[1:], "config", "YDIFF_CONFIG", defaultConfigPath)
 	themes := &themeCatalog{
 		catalog:    theme.NewCatalog(themesDir),
 		configPath: configPath,

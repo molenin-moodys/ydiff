@@ -176,7 +176,7 @@ func TestListThemesOutput(t *testing.T) {
 	require.NoError(t, theme.NewCatalog(themesDir).InitBundled())
 
 	names := testListThemeFiles(t, themesDir)
-	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "revdiff", "solarized-dark"}, names)
+	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "ydiff"}, names)
 }
 
 func TestCollectColors(t *testing.T) {
@@ -338,7 +338,7 @@ func TestResolveAutoThemeName(t *testing.T) {
 		darkBackground bool
 		want           string
 	}{
-		{name: "dark terminal uses default dark theme", darkBackground: true, want: "revdiff"},
+		{name: "dark terminal uses default dark theme", darkBackground: true, want: "ydiff"},
 		{name: "light terminal uses default light theme", darkBackground: false, want: "catppuccin-latte"},
 		{
 			name:           "custom dark choice is honored",
@@ -356,7 +356,7 @@ func TestResolveAutoThemeName(t *testing.T) {
 			name:           "empty custom dark choice falls back to default",
 			opts:           options{AutoThemeDark: "", AutoThemeLight: "basic"},
 			darkBackground: true,
-			want:           "revdiff",
+			want:           "ydiff",
 		},
 		{
 			name:           "empty custom light choice falls back to default",
@@ -572,7 +572,7 @@ func TestHandleThemes_NoOp(t *testing.T) {
 func TestDefaultThemesDir(t *testing.T) {
 	dir := defaultThemesDir()
 	assert.Contains(t, dir, ".config")
-	assert.Contains(t, dir, "revdiff")
+	assert.Contains(t, dir, "ydiff")
 	assert.Contains(t, dir, "themes")
 }
 
@@ -585,7 +585,7 @@ func TestThemeCatalog_Entries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, entries)
 
-	assert.Equal(t, "revdiff", entries[0].Name, "default theme should be first")
+	assert.Equal(t, "ydiff", entries[0].Name, "default theme should be first")
 	for _, e := range entries {
 		assert.NotEmpty(t, e.AccentColor, "every entry should have an accent color")
 	}
@@ -909,4 +909,11 @@ func TestPatchConfigTheme_testdataRoundTrip(t *testing.T) {
 			assert.Equal(t, "nord", opts.Theme, "Theme must be populated from the default section after patch")
 		})
 	}
+}
+
+func TestDefaultThemesDir_ResolvesUnderYdiffConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := defaultThemesDir()
+	assert.Equal(t, filepath.Join(home, ".config", "ydiff", "themes"), dir)
 }

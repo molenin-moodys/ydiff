@@ -327,19 +327,19 @@ default theme `revdiff` -> `ydiff`.
 - Rename: `themes/gallery/revdiff` -> `themes/gallery/ydiff`
 - Modify: `app/theme/catalog_test.go`
 
-- [ ] change config, keybindings, themes and history paths to `~/.config/ydiff/` at the
+- [x] change config, keybindings, themes and history paths to `~/.config/ydiff/` at the
       verified sites — note `app/theme/catalog.go` takes `themesDir` as a constructor
       argument and resolves nothing; `app/themes.go` is the file that does
-- [ ] change every `REVDIFF_` struct tag in `app/config.go` to `YDIFF_`
-- [ ] rename the bundled default theme from `revdiff` to `ydiff`: `defaultThemeName`,
+- [x] change every `REVDIFF_` struct tag in `app/config.go` to `YDIFF_`
+- [x] rename the bundled default theme from `revdiff` to `ydiff`: `defaultThemeName`,
       `defaultAutoThemeDark`, the asset directory, and the three name assertions in
       `app/theme/catalog_test.go`
-- [ ] add **no** fallback to `~/.config/revdiff/` — reading another tool's configuration
+- [x] add **no** fallback to `~/.config/revdiff/` — reading another tool's configuration
       silently is the coupling this fork exists to avoid
-- [ ] write tests asserting config, keybindings, themes and history resolve under the new
+- [x] write tests asserting config, keybindings, themes and history resolve under the new
       directory, that a `REVDIFF_*` variable has no effect, and that the default theme
       resolves by its new name
-- [ ] run `go test ./...` — **phase 1 complete**: a working, self-owned tool with no external
+- [x] run `go test ./...` — **phase 1 complete**: a working, self-owned tool with no external
       dependencies, before the browser exists
 
 ### Task 7: gitstate — repository resolution

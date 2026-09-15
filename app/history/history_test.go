@@ -130,7 +130,7 @@ func TestHistoryDir_Default(t *testing.T) {
 	svc := New("")
 	p := Params{Path: "/Users/joe/myrepo"}
 	got := svc.historyDir(p)
-	assert.Equal(t, filepath.Join(home, ".config", "revdiff", "history", "myrepo"), got)
+	assert.Equal(t, filepath.Join(home, ".config", "ydiff", "history", "myrepo"), got)
 }
 
 func TestHistoryDir_CustomDir(t *testing.T) {

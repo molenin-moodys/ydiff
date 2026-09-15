@@ -20,17 +20,17 @@ import (
 
 const (
 	autoThemeName         = "auto"
-	defaultAutoThemeDark  = "revdiff"
+	defaultAutoThemeDark  = "ydiff"
 	defaultAutoThemeLight = "catppuccin-latte"
 )
 
-// defaultThemesDir returns ~/.config/revdiff/themes.
+// defaultThemesDir returns ~/.config/ydiff/themes.
 func defaultThemesDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "revdiff", "themes")
+	return filepath.Join(home, ".config", "ydiff", "themes")
 }
 
 // handleThemes processes theme-related flags: auto-init on first run, --init-themes, --init-all-themes,

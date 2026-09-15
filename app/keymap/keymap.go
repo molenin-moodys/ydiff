@@ -1,4 +1,4 @@
-// Package keymap provides user-configurable key bindings for revdiff.
+// Package keymap provides user-configurable key bindings for ydiff.
 // It maps key names (as returned by bubbletea's KeyMsg.String()) to action names.
 package keymap
 
@@ -102,7 +102,7 @@ var validActions = map[Action]bool{
 // keybinding files onto their canonical replacement. The action was renamed
 // from "commit_info" to "info" when the popup expanded to cover description
 // and aggregate stats; honoring the old name lets pre-existing
-// ~/.config/revdiff/keybindings files keep working without manual edits.
+// ~/.config/ydiff/keybindings files keep working without manual edits.
 // The parser surfaces a single [WARN] per deprecated alias for the lifetime
 // of the process (see warnOnceDeprecatedAlias) so that a file with several
 // "map ... commit_info" lines does not spam the log.

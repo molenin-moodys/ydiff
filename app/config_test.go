@@ -43,7 +43,7 @@ func TestParseArgs_Defaults(t *testing.T) {
 	assert.Empty(t, opts.StdinName)
 	assert.Empty(t, opts.Refs.Base)
 	assert.Empty(t, opts.Refs.Against)
-	assert.Equal(t, "revdiff", opts.AutoThemeDark)
+	assert.Equal(t, "ydiff", opts.AutoThemeDark)
 	assert.Equal(t, "catppuccin-latte", opts.AutoThemeLight)
 }
 
@@ -55,7 +55,7 @@ func TestParseArgs_NoConfirmDiscard(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_NO_CONFIRM_DISCARD", "true")
+		t.Setenv("YDIFF_NO_CONFIRM_DISCARD", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.NoConfirmDiscard)
@@ -80,7 +80,7 @@ func TestParseArgs_NoConfirmReload(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_NO_CONFIRM_RELOAD", "true")
+		t.Setenv("YDIFF_NO_CONFIRM_RELOAD", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.NoConfirmReload)
@@ -105,7 +105,7 @@ func TestParseArgs_NoMouse(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_NO_MOUSE", "true")
+		t.Setenv("YDIFF_NO_MOUSE", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.NoMouse)
@@ -130,7 +130,7 @@ func TestParseArgs_Wrap(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_WRAP", "true")
+		t.Setenv("YDIFF_WRAP", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.Wrap)
@@ -161,7 +161,7 @@ func TestParseArgs_WrapIndent(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_WRAP_INDENT", "2")
+		t.Setenv("YDIFF_WRAP_INDENT", "2")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.Equal(t, 2, opts.WrapIndent)
@@ -186,7 +186,7 @@ func TestParseArgs_Collapsed(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_COLLAPSED", "true")
+		t.Setenv("YDIFF_COLLAPSED", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.Collapsed)
@@ -211,7 +211,7 @@ func TestParseArgs_Compact(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_COMPACT", "true")
+		t.Setenv("YDIFF_COMPACT", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.Compact)
@@ -242,7 +242,7 @@ func TestParseArgs_CompactContext(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_COMPACT_CONTEXT", "7")
+		t.Setenv("YDIFF_COMPACT_CONTEXT", "7")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.Equal(t, 7, opts.CompactContext)
@@ -286,7 +286,7 @@ func TestParseArgs_CrossFileHunks(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_CROSS_FILE_HUNKS", "true")
+		t.Setenv("YDIFF_CROSS_FILE_HUNKS", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.CrossFileHunks)
@@ -311,7 +311,7 @@ func TestParseArgs_LineNumbers(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_LINE_NUMBERS", "true")
+		t.Setenv("YDIFF_LINE_NUMBERS", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.LineNumbers)
@@ -336,7 +336,7 @@ func TestParseArgs_Blame(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_BLAME", "true")
+		t.Setenv("YDIFF_BLAME", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.Blame)
@@ -367,7 +367,7 @@ func TestParseArgs_Untracked(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_UNTRACKED", "true")
+		t.Setenv("YDIFF_UNTRACKED", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.Untracked)
@@ -426,7 +426,7 @@ func TestParseArgs_WordDiff(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_WORD_DIFF", "true")
+		t.Setenv("YDIFF_WORD_DIFF", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.WordDiff)
@@ -457,7 +457,7 @@ func TestParseArgs_AnnotationMarker(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_ANNOTATION_MARKER", ">>>")
+		t.Setenv("YDIFF_ANNOTATION_MARKER", ">>>")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.Equal(t, ">>>", opts.AnnotationMarker)
@@ -516,7 +516,7 @@ func TestParseArgs_ExitCodeOnAnnotations(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_EXIT_CODE_ON_ANNOTATIONS", "true")
+		t.Setenv("YDIFF_EXIT_CODE_ON_ANNOTATIONS", "true")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.True(t, opts.ExitCodeOnAnnotations)
@@ -639,8 +639,8 @@ func TestParseArgs_ColorFlags(t *testing.T) {
 }
 
 func TestParseArgs_EnvVars(t *testing.T) {
-	t.Setenv("REVDIFF_TREE_WIDTH", "7")
-	t.Setenv("REVDIFF_COLOR_ACCENT", "#ff0000")
+	t.Setenv("YDIFF_TREE_WIDTH", "7")
+	t.Setenv("YDIFF_COLOR_ACCENT", "#ff0000")
 	opts, err := parseArgs(noConfigArgs(t))
 	require.NoError(t, err)
 	assert.Equal(t, 7, opts.TreeWidth)
@@ -648,7 +648,7 @@ func TestParseArgs_EnvVars(t *testing.T) {
 }
 
 func TestParseArgs_CLIOverridesEnv(t *testing.T) {
-	t.Setenv("REVDIFF_TREE_WIDTH", "7")
+	t.Setenv("YDIFF_TREE_WIDTH", "7")
 	opts, err := parseArgs([]string{"--tree-width=9"})
 	require.NoError(t, err)
 	assert.Equal(t, 9, opts.TreeWidth)
@@ -755,20 +755,20 @@ func TestResolveFlagPath(t *testing.T) {
 }
 
 func TestResolveFlagPath_configWiring(t *testing.T) {
-	path := resolveFlagPath([]string{"--config", "/custom/path"}, "config", "REVDIFF_CONFIG", defaultConfigPath)
+	path := resolveFlagPath([]string{"--config", "/custom/path"}, "config", "YDIFF_CONFIG", defaultConfigPath)
 	assert.Equal(t, "/custom/path", path)
 
-	t.Setenv("REVDIFF_CONFIG", "/env/config")
-	path = resolveFlagPath([]string{}, "config", "REVDIFF_CONFIG", defaultConfigPath)
+	t.Setenv("YDIFF_CONFIG", "/env/config")
+	path = resolveFlagPath([]string{}, "config", "YDIFF_CONFIG", defaultConfigPath)
 	assert.Equal(t, "/env/config", path)
 }
 
 func TestResolveFlagPath_keysWiring(t *testing.T) {
-	path := resolveFlagPath([]string{"--keys", "/custom/keys"}, "keys", "REVDIFF_KEYS", defaultKeysPath)
+	path := resolveFlagPath([]string{"--keys", "/custom/keys"}, "keys", "YDIFF_KEYS", defaultKeysPath)
 	assert.Equal(t, "/custom/keys", path)
 
-	t.Setenv("REVDIFF_KEYS", "/env/keys")
-	path = resolveFlagPath([]string{}, "keys", "REVDIFF_KEYS", defaultKeysPath)
+	t.Setenv("YDIFF_KEYS", "/env/keys")
+	path = resolveFlagPath([]string{}, "keys", "YDIFF_KEYS", defaultKeysPath)
 	assert.Equal(t, "/env/keys", path)
 }
 
@@ -802,7 +802,7 @@ func TestDumpConfig(t *testing.T) {
 func TestDefaultConfigPath(t *testing.T) {
 	path := defaultConfigPath()
 	assert.Contains(t, path, ".config")
-	assert.Contains(t, path, "revdiff")
+	assert.Contains(t, path, "ydiff")
 	assert.Contains(t, path, "config")
 }
 
@@ -831,7 +831,7 @@ func TestParseArgs_ExcludeShortFlag(t *testing.T) {
 }
 
 func TestParseArgs_ExcludeEnvVar(t *testing.T) {
-	t.Setenv("REVDIFF_EXCLUDE", "vendor,mocks,testdata")
+	t.Setenv("YDIFF_EXCLUDE", "vendor,mocks,testdata")
 	opts, err := parseArgs(noConfigArgs(t))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"vendor", "mocks", "testdata"}, opts.Exclude)
@@ -860,7 +860,7 @@ func TestParseArgs_IncludeShortFlag(t *testing.T) {
 }
 
 func TestParseArgs_IncludeEnvVar(t *testing.T) {
-	t.Setenv("REVDIFF_INCLUDE", "src,lib,cmd")
+	t.Setenv("YDIFF_INCLUDE", "src,lib,cmd")
 	opts, err := parseArgs(noConfigArgs(t))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"src", "lib", "cmd"}, opts.Include)
@@ -969,7 +969,7 @@ func TestParseArgs_DumpKeysFlag(t *testing.T) {
 func TestDefaultKeysPath(t *testing.T) {
 	path := defaultKeysPath()
 	assert.Contains(t, path, ".config")
-	assert.Contains(t, path, "revdiff")
+	assert.Contains(t, path, "ydiff")
 	assert.Contains(t, path, "keybindings")
 }
 
@@ -980,7 +980,7 @@ func TestParseArgs_ThemeFlag(t *testing.T) {
 }
 
 func TestParseArgs_ThemeEnv(t *testing.T) {
-	t.Setenv("REVDIFF_THEME", "nord")
+	t.Setenv("YDIFF_THEME", "nord")
 	opts, err := parseArgs(noConfigArgs(t))
 	require.NoError(t, err)
 	assert.Equal(t, "nord", opts.Theme)
@@ -995,8 +995,8 @@ func TestParseArgs_AutoThemeOptions(t *testing.T) {
 	})
 
 	t.Run("env", func(t *testing.T) {
-		t.Setenv("REVDIFF_AUTO_THEME_DARK", "nord")
-		t.Setenv("REVDIFF_AUTO_THEME_LIGHT", "basic")
+		t.Setenv("YDIFF_AUTO_THEME_DARK", "nord")
+		t.Setenv("YDIFF_AUTO_THEME_LIGHT", "basic")
 		opts, err := parseArgs(noConfigArgs(t))
 		require.NoError(t, err)
 		assert.Equal(t, "nord", opts.AutoThemeDark)
@@ -1042,4 +1042,41 @@ func TestParseArgs_InstallThemeFlag(t *testing.T) {
 	opts, err := parseArgs(append(noConfigArgs(t), "--install-theme", "dracula", "--install-theme", "nord"))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"dracula", "nord"}, opts.InstallTheme)
+}
+
+func TestDefaultConfigPath_ResolvesUnderYdiffConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := defaultConfigPath()
+	assert.Equal(t, filepath.Join(home, ".config", "ydiff", "config"), path)
+}
+
+func TestDefaultKeysPath_ResolvesUnderYdiffConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := defaultKeysPath()
+	assert.Equal(t, filepath.Join(home, ".config", "ydiff", "keybindings"), path)
+}
+
+func TestResolveFlagPath_RevdiffEnvVarHasNoEffect(t *testing.T) {
+	// a REVDIFF_* environment variable must be silently ignored: this fork does
+	// not read the old tool's environment under any name.
+	t.Setenv("REVDIFF_CONFIG", "/should/not/be/used")
+	path := resolveFlagPath([]string{}, "config", "YDIFF_CONFIG", defaultConfigPath)
+	assert.NotEqual(t, "/should/not/be/used", path)
+	assert.Equal(t, defaultConfigPath(), path)
+}
+
+func TestResolveFlagPath_YdiffEnvVarIsUsed(t *testing.T) {
+	t.Setenv("YDIFF_CONFIG", "/env/config")
+	path := resolveFlagPath([]string{}, "config", "YDIFF_CONFIG", defaultConfigPath)
+	assert.Equal(t, "/env/config", path)
+}
+
+func TestParseArgs_RevdiffEnvVarHasNoEffect(t *testing.T) {
+	// a legacy REVDIFF_* variable must not influence parsed options at all.
+	t.Setenv("REVDIFF_NO_MOUSE", "true")
+	opts, err := parseArgs(noConfigArgs(t))
+	require.NoError(t, err)
+	assert.False(t, opts.NoMouse, "REVDIFF_NO_MOUSE must have no effect; only YDIFF_NO_MOUSE is honored")
 }
