@@ -639,17 +639,86 @@ vendors, so this test runs the real model in-process instead.*
 
 ### Task 25: Verify acceptance criteria
 
-- [ ] verify each Overview requirement explicitly: browser navigation, `/` filter, both
+- [x] verify each Overview requirement explicitly: browser navigation, `/` filter, both
       scopes, review entry from both panes, mouse, annotations flushing as one output
-- [ ] verify edge cases: no repository, base not found, unreadable directory, broken symlink,
+      (verified live under a pty against a throwaway repo, plus unit tests. Confirmed
+      working: three-column navigation; both scopes via `t` incl. the
+      `base branch not found - pass --base-branch` message; `d` push / `q` pop; Tab focus;
+      `Enter` into review from the changed-files pane *and* from the middle column
+      (`browserScreen.ReviewTarget`, `app/ui/root.go:493`); mouse (`app/ui/mouse.go:594`,
+      10 tests in `app/ui/browsermouse_test.go`); two review visits flushing as ONE output
+      file containing both annotations. **Two gaps — see ⚠️ below.**)
+- [x] verify edge cases: no repository, base not found, unreadable directory, broken symlink,
       empty changeset, and each of the three terminal-width tiers
-- [ ] verify the design's "Out of scope for v1" list was honoured — no file operations, no
+      (all six handled with tests. Two test-coverage holes, not behaviour bugs: the
+      unreadable-directory case is proven at `browser.Read` level with a real `chmod 0o000`
+      fixture but the inline render test uses a *missing* directory instead; and the width
+      tiers assert the 100 boundary but not 60/99/59, so flipping `>= mediumTierWidth` to
+      `>` in `app/ui/browserview.go:80` would go undetected)
+- [x] verify the design's "Out of scope for v1" list was honoured — no file operations, no
       fsnotify, no annotation counter, no hg/jj, no vim motions, no unchanged-file preview
-- [ ] confirm no `revdiff` string survives outside `LICENSE-revdiff`, `UPSTREAM.md` and
+      (all six clean. No mutation calls in `app/browser/` or `app/ui/` beyond inherited
+      temp/history/annotation writes; no fsnotify in `go.mod`/`vendor`; `statusBarText`
+      carries no annotation count and `BrowserViewParams` has no field for one; zero
+      hg/jj/vim matches in any non-vendor `.go` file; the changed pane renders only
+      `[]gitstate.ChangedFile`. Cosmetic leftovers for task 26: six orphaned
+      `app/diff/testdata/{hg,jj}log_*.txt` fixtures, and present-tense hg/jj prose in
+      `CLAUDE.md` and `docs/ARCHITECTURE.md`)
+- [x] confirm no `revdiff` string survives outside `LICENSE-revdiff`, `UPSTREAM.md` and
       `README.md`: `grep -rn revdiff . --exclude-dir=.git`
-- [ ] run `make test` and `golangci-lint run` with the inherited configuration
-- [ ] record `go test -cover ./...` and confirm no package touched dropped below its
+      (**not clean** — leftovers survive; none affect behaviour, all are task-26 material.
+      Shipped/user-visible: `.goreleaser.yml:33,53` `homepage: .../umputun/revdiff`;
+      `CONTRIBUTING.md` is still upstream's verbatim ("Contributing to revdiff",
+      revdiff.com links) and was never triaged by task 3. Internal identifiers:
+      `app/diff/fingerprint.go:10` `revdiff-file-fingerprint-v1`, and the temp-file
+      prefixes `revdiff-index-*` / `revdiff-blame-*` / `revdiff-annot-*`
+      (`app/diff/diff.go:493`, `app/diff/blame.go:52`, `app/editor/editor.go:232`, the
+      last asserted on by `app/editor/editor_test.go:115,330`). Plus doc comments in
+      `app/ui/doc.go`, `overlay/overlay.go`, `model.go`, `loaders.go`, `root.go:24`,
+      `stdin.go:21`, `main.go:117`, `diff/*.go`, `docs/ARCHITECTURE.md:211`, and the
+      literal theme name `"revdiff"` in several inherited tests)
+- [x] run `make test` and `golangci-lint run` with the inherited configuration
+      (`make test` — every package green except the pre-known environmental failure
+      `TestGit_FileBlame_UsesIndexForStagedDiffs` in `app/diff` (local git 2.33.0 vs. the
+      `git blame --contents` behaviour upstream's CI has); `go vet ./...` clean.
+      `golangci-lint run` **skipped — golangci-lint is not installed on this machine**)
+- [x] record `go test -cover ./...` and confirm no package touched dropped below its
       pre-change coverage (upstream has no coverage gate, so this is the honest check)
+      (no stored baseline exists, so no comparison is possible — recording actuals instead:
+      app 79.5, annotation 97.2, browser 93.8, diff 93.1, editor 91.9, fsutil 70.6,
+      gitstate 82.8, highlight 91.9, history 92.7, keymap 95.6, review 95.3, theme 86.4,
+      ui 93.8, ui/overlay 97.3, ui/sidepane 93.4, ui/style 98.5, ui/worddiff 99.0)
+
+⚠️ **Gap 1 — the `/` filter cannot be typed into.** `keymap.ResolveBrowser`
+(`app/keymap/keymap.go:463`) correctly returns the empty Action for ordinary keys while the
+filter is active, documented as "so the caller treats it as literal filter input" — but no
+caller does. `browserScreen.handleKey` (`app/ui/root.go:396`) falls into `default:` and
+no-ops, and `Nav.FilterAppend` / `Nav.FilterBackspace` (`app/browser/nav.go:159,166`) have
+**no non-test callers anywhere**. Live result: `/` opens the filter box, the status bar shows
+`filter:` with a permanently empty query, and typed characters are discarded. Fix: add a
+`default:` branch in `handleKey` that, when `b.nav.Filter().Editing()`, routes
+`tea.KeyRunes` to `FilterAppend` and `tea.KeyBackspace` to `FilterBackspace`. Task 15 built
+and tested the filter state machine; task 16-17 never wired the keystrokes to it.
+
+⚠️ **Gap 2 — `.` (toggle hidden files) is a no-op.** The action is registered
+(`app/keymap/keymap.go:90,367`) and advertised in the help overlay
+(`app/ui/mouse.go:742`), but `browserScreen.handleKey`'s own comment concedes "hidden-file
+toggle (no pane implements it yet)". `Nav.showHidden` (`app/browser/nav.go:20`) is set once
+in `NewNav` and never changes; there is no `ToggleHidden`. Confirmed live: pressing `.`
+produces no redraw and dot-files stay hidden. Fix: add `Nav.ToggleHidden()` that flips the
+field and returns `n.load()`, and dispatch it from `handleKey`.
+
+ℹ️ Cosmetic: `ydiff --help` prints the positional args twice —
+`Usage: ydiff [OPTIONS] [base] [against] [base] [against]`.
+
+✅ Integration smoke check (not owned by any earlier task) passed end to end against a real
+pty: `ydiff --only=<file> --output=<tmp> --wrap` renders the diff, annotates, and writes
+exactly `## plan.md:2 (-)\nuse errors.Is() instead of direct comparison`; exit 0 without
+annotations, exit 10 with `--exit-code-on-annotations`; stdout fallback carries the
+annotations when `--output` is omitted; the same works through a symlink named `revdiff`,
+which is the exact shape `planning/scripts/launch-plan-review.sh:47` invokes. Bare `ydiff`
+starts the browser. `--browser-widths` rejects non-numeric, non-positive and wrong-count
+values with clear messages and accepts `1,2,3` as proportions.
 
 ### Task 26: [Final] Update documentation
 
