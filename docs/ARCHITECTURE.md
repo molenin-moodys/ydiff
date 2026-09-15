@@ -43,7 +43,7 @@ TUI for reviewing diffs, files, and documents with inline annotations, built wit
 | `main.go` | `main()`, early-exit commands (version, dump-config, dump-keys), `run()` orchestration |
 | `config.go` | `options` struct, `parseArgs`, `dumpConfig`, `loadConfigFile`, config-path helpers |
 | `stdin.go` | stdin validation, `/dev/tty` reopen, stdin renderer prep |
-| `renderer_setup.go` | `DetectVCS` wiring, `setupVCSRenderer` (git/hg/jj/no-VCS/all-files) |
+| `renderer_setup.go` | `DetectVCS` wiring, `setupVCSRenderer` (git/no-VCS/all-files) |
 | `themes.go` | theme CLI commands (`--init-themes`, `--install-theme`, `--list-themes`, `--theme`), `applyTheme()`, `themeCatalog` adapter (composes `theme.Catalog` + config persistence for `ui.ThemeCatalog` interface) |
 | `history_save.go` | `histReq` struct and `saveHistory` |
 
@@ -51,7 +51,7 @@ Key wiring pattern — all concrete types constructed here, injected into `ui.Mo
 
 ```go
 ModelConfig{
-    Renderer:      diffRenderer,           // diff.Git, diff.Hg, etc.
+    Renderer:      diffRenderer,           // diff.Git, diff.FileReader, etc.
     Highlighter:   highlighter,            // highlight.Highlighter
     StyleResolver: styleResolver,          // style.Resolver
     StyleRenderer: styleRenderer,          // style.Renderer
@@ -69,16 +69,14 @@ ModelConfig{
 
 Handles all interaction with version control systems and diff parsing.
 
-**VCS detection** (`vcs.go`): `DetectVCS()` walks up directory tree looking for `.jj`/`.git`/`.hg` markers, returns `VCSJJ`, `VCSGit`, `VCSHg`, or `VCSNone`. `.jj` is checked before `.git` so colocated jj+git repositories resolve as jj (reads go through the jj working-copy model instead of bypassing it via git).
+**VCS detection** (`vcs.go`): `DetectVCS()` walks up the directory tree looking for a `.git` marker, returns `VCSGit` or `VCSNone`. Git is the sole supported VCS; the `VCSType`/`DetectVCS` abstraction is kept separate from the rest of the codebase (rather than hardcoding "git" at every call site) so adding another VCS back is a matter of extending this function and adding a new `Renderer` implementation, not reworking callers. Mercurial and Jujutsu renderers existed pre-fork and were removed; see `UPSTREAM.md`.
 
 **Renderer implementations** — all implement the `ui.Renderer` interface (`ChangedFiles()` + `FileDiff()`). `FileDiff` takes a single `FileDiffRequest` value (`Ref`, `Path`, `OldPath`, `Staged`, `ContextLines`) rather than positional args — bundled to stay under the 4-param limit and to carry the rename origin:
-- `Git` — runs `git diff`, parses unified diff output. Rename-aware: `ChangedFiles` keeps the rename origin on `FileEntry.OldPath`, and `FileDiff` passes `-M` plus both old/new paths (`pathArgs`) so git pairs the rename into a minimal diff instead of rendering the file as fully added. Untracked renames (plain `mv old new`, where `new` is untracked so `git diff -M` can't pair it) are recovered by `UntrackedRenames` off a throwaway index (`tempIndexWithIntentToAdd` copies `.git/index`, `git add -N` the untracked paths against the copy with `GIT_INDEX_FILE`, then `git diff -M` reports the pair); `FileDiff` renders them the same way via `untrackedRenameDiff`. Git-only — `Hg`/`Jj` never set `OldPath`, so they ignore it
-- `Hg` — runs `hg diff --git`, parses unified diff output
-- `Jj` — runs `jj diff --git`, parses unified diff output; git-style refs (HEAD, HEAD~N, A..B) translate to jj revsets via `--from`/`--to`. jj emits raw bytes for binary files, so `(*Jj).synthesizeBinaryDiff` rewrites such diffs with the git-style "Binary files … differ" marker so `parseUnifiedDiff` produces a binary placeholder.
+- `Git` — runs `git diff`, parses unified diff output. Rename-aware: `ChangedFiles` keeps the rename origin on `FileEntry.OldPath`, and `FileDiff` passes `-M` plus both old/new paths (`pathArgs`) so git pairs the rename into a minimal diff instead of rendering the file as fully added. Untracked renames (plain `mv old new`, where `new` is untracked so `git diff -M` can't pair it) are recovered by `UntrackedRenames` off a throwaway index (`tempIndexWithIntentToAdd` copies `.git/index`, `git add -N` the untracked paths against the copy with `GIT_INDEX_FILE`, then `git diff -M` reports the pair); `FileDiff` renders them the same way via `untrackedRenameDiff`. The only VCS renderer in this fork — Mercurial (`Hg`) and Jujutsu (`Jj`) renderers existed upstream and were removed (see `UPSTREAM.md`).
 
-**CommitLogger capability** (`CommitLog(ref string) ([]CommitInfo, error)`) — an additive capability interface implemented by `Git`/`Hg`/`Jj` and consumed by the `i` info overlay. Separate from the base `Renderer` so non-VCS renderers (`FileReader`, `DirectoryReader`, `StdinReader`) stay unaffected. Each VCS translates the pre-combined ref string to its own log syntax (`X..HEAD` for git, `X::.` for hg, `X..@` for jj), caps results at 500 commits, and strips raw `\x1b` bytes from subject/body at parse time so the overlay can render without re-scanning for ANSI injection. Hg uses ASCII US/RS separators (`\x1f`/`\x1e`) because literal NUL is invalid in argv; git and jj use NUL/SOH via stdout.
+**CommitLogger capability** (`CommitLog(ref string) ([]CommitInfo, error)`) — an additive capability interface implemented by `Git` and consumed by the `i` info overlay. Separate from the base `Renderer` so non-VCS renderers (`FileReader`, `DirectoryReader`, `StdinReader`) stay unaffected. Translates the pre-combined ref string to git's own log syntax (`X..HEAD`), caps results at 500 commits, and strips raw `\x1b` bytes from subject/body at parse time so the overlay can render without re-scanning for ANSI injection. Uses ASCII US/RS separators (`\x1f`/`\x1e`) so a commit message containing other delimiter characters can't desynchronize the parser.
 - `FileReader` — reads standalone files as full-context (no VCS needed)
-- `DirectoryReader` — lists all tracked files via a pluggable lister (`git ls-files` by default; `NewJjDirectoryReader` uses `jj file list`) for `--all-files` mode
+- `DirectoryReader` — lists all tracked files via `git ls-files` for `--all-files` mode
 - `StdinReader` — reads from stdin as scratch buffer
 - `FallbackRenderer` — wraps a primary renderer with fallback for files not in diff
 - `ExcludeFilter` / `IncludeFilter` — decorators for prefix-based file filtering
@@ -88,7 +86,7 @@ Handles all interaction with version control systems and diff parsing.
 - `Change` — `ChangeAdd`, `ChangeRemove`, `ChangeContext`, or `ChangeDivider`
 - `OldNum` / `NewNum` — original and new line numbers (0 for non-applicable)
 
-**Blame** (`blame.go`, `hgblame.go`, `jjblame.go`): `Blamer` interface provides `FileBlame()` returning `map[int]BlameLine` keyed by new line number. jj blame uses `jj file annotate -T <template>` with a tab-separated template.
+**Blame** (`blame.go`): `Blamer` interface provides `FileBlame()` returning `map[int]BlameLine` keyed by new line number, implemented by `diff.Git` (runs `git blame`). Mercurial and Jujutsu blame implementations (`hgblame.go`, `jjblame.go`) existed upstream and were removed along with the rest of hg/jj support.
 
 ### app/ui/ — TUI package
 
@@ -223,10 +221,10 @@ All consumer-side — defined in `app/ui/model.go`, not in implementor packages 
 
 | Interface | Methods | Implementors |
 |-----------|---------|-------------|
-| `Renderer` | `ChangedFiles()`, `FileDiff()` | `diff.Git`, `diff.Hg`, `diff.FileReader`, `diff.DirectoryReader`, `diff.StdinReader`, `diff.FallbackRenderer`, `diff.ExcludeFilter`, `diff.IncludeFilter` |
-| `commitLogSource` | `CommitLog(ref)` | `diff.Git`, `diff.Hg`, `diff.Jj` (via `diff.CommitLogger` capability; resolved at Model construction by type-assertion on the Renderer when `ModelConfig.CommitLog` is nil) |
+| `Renderer` | `ChangedFiles()`, `FileDiff()` | `diff.Git`, `diff.FileReader`, `diff.DirectoryReader`, `diff.StdinReader`, `diff.FallbackRenderer`, `diff.ExcludeFilter`, `diff.IncludeFilter` |
+| `commitLogSource` | `CommitLog(ref)` | `diff.Git` (via `diff.CommitLogger` capability; resolved at Model construction by type-assertion on the Renderer when `ModelConfig.CommitLog` is nil) |
 | `SyntaxHighlighter` | `HighlightLines()`, `SetStyle()`, `StyleName()` | `highlight.Highlighter` |
-| `Blamer` | `FileBlame()` | `diff.Git`, `diff.Hg` |
+| `Blamer` | `FileBlame()` | `diff.Git` |
 | `styleResolver` | `Color()`, `Style()`, `LineBg()`, `LineStyle()`, `WordDiffBg()`, `IndicatorBg()` | `style.Resolver` |
 | `styleRenderer` | `AnnotationInline()`, `DiffCursor()`, `StatusBarSeparator()`, `FileStatusMark()`, `FileReviewedMark()`, `FileAnnotationMark()` | `style.Renderer` |
 | `sgrProcessor` | `Reemit()` | `style.SGR` |
@@ -407,8 +405,8 @@ Several mutually exclusive input sources, validated at parse time:
 
 | Mode | Flag | Renderer | Notes |
 |------|------|----------|-------|
-| VCS diff (default) | `[base] [against]` | `Git` or `Hg` | Detects VCS, runs diff |
-| Staged changes | `--staged` | `Git` or `Hg` | Cannot combine with refs |
+| VCS diff (default) | `[base] [against]` | `Git` | Detects VCS, runs diff |
+| Staged changes | `--staged` | `Git` | Cannot combine with refs |
 | All tracked files | `--all-files` / `-A` | `DirectoryReader` | Git only, not with refs/staged/only |
 | Single file(s) | `--only` / `-F` | `FileReader` | Not with include |
 | Stdin (raw text) | `--stdin` | `StdinReader` | Sniff fails or returns `ErrNotUnifiedDiff` |

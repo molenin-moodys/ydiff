@@ -514,7 +514,7 @@ type annotationState struct {
 	rowCache map[annotCacheKey][]string
 }
 
-// Model is the top-level bubbletea model for revdiff.
+// Model is the top-level bubbletea model for ydiff.
 type Model struct {
 	// injected dependencies
 	resolver     styleResolver

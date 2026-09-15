@@ -1,4 +1,4 @@
-// Package ui implements the bubbletea TUI for revdiff — a diff reviewer with inline annotations.
+// Package ui implements the bubbletea TUI for ydiff — a diff reviewer with inline annotations.
 //
 // The package centers on a single [Model] struct that implements bubbletea's Model interface.
 // Model methods are split across multiple files by concern area, all operating on the same struct:

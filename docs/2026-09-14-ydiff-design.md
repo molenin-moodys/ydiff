@@ -247,12 +247,23 @@ positional refs.
 | Flag | Purpose |
 |---|---|
 | `--base-branch` | override for branch-scope base resolution; also settable per repository in config |
+| `--base-branch-repo` | per-repository override for `--base-branch`, `repo-root-path:branch` (repeatable); implemented as `options.BaseBranchRepos`, a config-file/CLI-map field with no env var, consulted only when `--base-branch` is empty — see `options.resolveBaseBranch` in `app/config.go` |
 | `--browser` | force the browser screen even when diff arguments are present |
 | `--browser-widths` | the three column percentages, default `15,35,50` |
 
 `--base-branch` is deliberately not `--base`: upstream's positional arguments are already
 called `base` and `against`, and the flag names the default branch used to find a fork
 point, not the left side of a comparison.
+
+**Implementation note — config precedence:** the plain intent above ("also settable per
+repository in config") landed as `--base-branch-repo`, added during implementation as the
+actual per-repository mechanism (the paragraph above only sketched "also settable... in
+config" without naming a flag). Separately, this go-flags setup parses the config file into
+`opts` *before* `flags.ParseArgs` runs, and go-flags only applies an `env`-tagged value
+when the field is still at its zero value — so a config-file value wins over the same-named
+environment variable, while an explicit CLI flag still wins over both. This is pre-existing
+upstream parsing behavior, not something this fork changed, but it is easy to assume the
+opposite (flags > env > config, the usual convention) so it's recorded here.
 
 **Startup routing:**
 

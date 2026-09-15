@@ -1,4 +1,4 @@
-// Package overlay owns all layered popup UI for revdiff — help, annotation list,
+// Package overlay owns all layered popup UI for ydiff — help, annotation list,
 // and theme selector overlays. It provides a Manager coordinator that enforces
 // mutual exclusivity (only one overlay visible at a time), routes key dispatch
 // to the active overlay, and composes the overlay on top of the base view via

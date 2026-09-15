@@ -137,7 +137,7 @@ func (o options) startupUntracked() bool {
 func parseArgs(args []string) (options, error) {
 	var opts options
 	p := flags.NewParser(&opts, flags.Default)
-	p.Usage = "[OPTIONS] [base] [against]"
+	p.Usage = "[OPTIONS]"
 
 	// determine config path from args before full parsing
 	configPath := resolveFlagPath(args, "config", "YDIFF_CONFIG", defaultConfigPath)

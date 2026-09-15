@@ -756,13 +756,13 @@ fail for each defect before the fix.
 
 ### Task 26: [Final] Update documentation
 
-- [ ] update `README.md` with browser usage, the full key table, the narrow-terminal rules
+- [x] update `README.md` with browser usage, the full key table, the narrow-terminal rules
       and the new flags
-- [ ] verify `LICENSE-revdiff`, `UPSTREAM.md` and the yazi attribution note are present and
+- [x] verify `LICENSE-revdiff`, `UPSTREAM.md` and the yazi attribution note are present and
       accurate
-- [ ] update `CLAUDE.md` with conventions discovered while working in the fork
-- [ ] update `docs/2026-09-14-ydiff-design.md` if implementation diverged from it
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md` with conventions discovered while working in the fork
+- [x] update `docs/2026-09-14-ydiff-design.md` if implementation diverged from it
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
