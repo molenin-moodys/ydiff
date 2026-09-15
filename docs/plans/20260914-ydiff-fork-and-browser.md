@@ -498,15 +498,15 @@ registering them afterwards would mean reworking all three.*
 - Create: `app/ui/root.go`, `app/ui/root_test.go`
 - Modify: `app/ui/model.go`
 
-- [ ] write tests first driving `Update` directly: `d` pushes the review screen, `q` in
+- [x] write tests first driving `Update` directly: `d` pushes the review screen, `q` in
       review pops back to the browser, `q` in the browser quits
-- [ ] write the entry-point test: launched straight into review, `q` exits the process rather
+- [x] write the entry-point test: launched straight into review, `q` exits the process rather
       than revealing a browser that was never there
-- [ ] implement the root model owning the active screen and delegating `Update` and `View`
-- [ ] implement `gitstate` cache invalidation on **return from the review screen**, where a
+- [x] implement the root model owning the active screen and delegating `Update` and `View`
+- [x] implement `gitstate` cache invalidation on **return from the review screen**, where a
       file may have just been edited
-- [ ] write a test asserting window-resize messages reach both screens
-- [ ] run `go test -race ./app/ui/...` — must pass before task 18
+- [x] write a test asserting window-resize messages reach both screens
+- [x] run `go test -race ./app/ui/...` — must pass before task 18
 
 ### Task 18: One annotation store across screen transitions
 
