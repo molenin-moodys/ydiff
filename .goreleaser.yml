@@ -1,0 +1,59 @@
+version: 2
+
+builds:
+  - id: ydiff
+    main: ./app
+    binary: ydiff
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
+
+archives:
+  - id: ydiff
+    builds:
+      - ydiff
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - completions/*
+
+nfpms:
+  - id: ydiff
+    package_name: ydiff
+    builds:
+      - ydiff
+    vendor: umputun
+    homepage: https://github.com/molenin-moodys/ydiff
+    maintainer: umputun
+    description: TUI for reviewing diffs, files, and documents with inline annotations
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: completions/ydiff.bash
+        dst: /usr/share/bash-completion/completions/ydiff
+      - src: completions/ydiff.zsh
+        dst: /usr/share/zsh/vendor-completions/_ydiff
+      - src: completions/ydiff.fish
+        dst: /usr/share/fish/vendor_completions.d/ydiff.fish
+
+brews:
+  - repository:
+      owner: umputun
+      name: homebrew-apps
+    directory: Formula
+    homepage: https://github.com/molenin-moodys/ydiff
+    description: TUI for reviewing diffs, files, and documents with inline annotations
+    license: MIT
+    extra_install: |
+      bash_completion.install "completions/ydiff.bash" => "ydiff"
+      zsh_completion.install "completions/ydiff.zsh" => "_ydiff"
+      fish_completion.install "completions/ydiff.fish" => "ydiff.fish"

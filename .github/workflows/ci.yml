@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches:
+    tags:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: set up go 1.26
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+        id: go
+
+      - name: build and test
+        run: |
+          go test -race -timeout=100s -covermode=atomic -coverprofile=$GITHUB_WORKSPACE/profile.cov_tmp ./...
+          grep -v -E "_mock.go|/mocks/" $GITHUB_WORKSPACE/profile.cov_tmp > $GITHUB_WORKSPACE/profile.cov
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: "v2.11.4"
+
+  lint-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: validate YAML frontmatter in markdown files
+        run: |
+          pip install pyyaml
+          python3 .github/scripts/validate-frontmatter.py
+
+      - name: shellcheck
+        run: |
+          find . -name '*.sh' -not -path './.git/*' -not -path './vendor/*' -print0 | xargs -0 shellcheck
