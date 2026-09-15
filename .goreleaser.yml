@@ -1,0 +1,59 @@
+version: 2
+
+builds:
+  - id: revdiff
+    main: ./app
+    binary: revdiff
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{ trimsuffix (replace (replace .CommitDate "-" "") ":" "") "Z" }}
+
+archives:
+  - id: revdiff
+    builds:
+      - revdiff
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - completions/*
+
+nfpms:
+  - id: revdiff
+    package_name: revdiff
+    builds:
+      - revdiff
+    vendor: umputun
+    homepage: https://github.com/umputun/revdiff
+    maintainer: umputun
+    description: TUI for reviewing diffs, files, and documents with inline annotations
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: completions/revdiff.bash
+        dst: /usr/share/bash-completion/completions/revdiff
+      - src: completions/revdiff.zsh
+        dst: /usr/share/zsh/vendor-completions/_revdiff
+      - src: completions/revdiff.fish
+        dst: /usr/share/fish/vendor_completions.d/revdiff.fish
+
+brews:
+  - repository:
+      owner: umputun
+      name: homebrew-apps
+    directory: Formula
+    homepage: https://github.com/umputun/revdiff
+    description: TUI for reviewing diffs, files, and documents with inline annotations
+    license: MIT
+    extra_install: |
+      bash_completion.install "completions/revdiff.bash" => "revdiff"
+      zsh_completion.install "completions/revdiff.zsh" => "_revdiff"
+      fish_completion.install "completions/revdiff.fish" => "revdiff.fish"

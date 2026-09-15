@@ -1,0 +1,373 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/jessevdk/go-flags"
+	"github.com/muesli/termenv"
+
+	"github.com/umputun/revdiff/app/annotation"
+	"github.com/umputun/revdiff/app/diff"
+	"github.com/umputun/revdiff/app/fsutil"
+	"github.com/umputun/revdiff/app/highlight"
+	"github.com/umputun/revdiff/app/keymap"
+	"github.com/umputun/revdiff/app/theme"
+	"github.com/umputun/revdiff/app/ui"
+	"github.com/umputun/revdiff/app/ui/overlay"
+	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/umputun/revdiff/app/ui/worddiff"
+)
+
+var revision = "unknown"
+
+const exitCodeAnnotations = 10
+
+func main() {
+	opts, parseErr := parseArgs(os.Args[1:])
+	if parseErr != nil {
+		var flagsErr *flags.Error
+		if errors.As(parseErr, &flagsErr) && flagsErr.Type == flags.ErrHelp {
+			os.Exit(0)
+		}
+		if !errors.As(parseErr, &flagsErr) {
+			fmt.Fprintf(os.Stderr, "error: %v\n", parseErr)
+		}
+		os.Exit(1)
+	}
+
+	// early-exit commands that don't need theme resolution
+	if opts.Version {
+		fmt.Printf("version: %s\n", revision)
+		os.Exit(0)
+	}
+
+	if opts.DumpConfig {
+		dumpConfig(os.Args[1:], os.Stdout)
+		os.Exit(0)
+	}
+
+	if opts.DumpKeys {
+		km := keymap.LoadOrDefault(resolveFlagPath(os.Args[1:], "keys", "REVDIFF_KEYS", defaultKeysPath))
+		if err := km.Dump(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	themesDir := defaultThemesDir()
+	cat := theme.NewCatalog(themesDir)
+	done, thErr := handleThemes(&opts, cat, os.Stdout, os.Stderr)
+	if thErr != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", thErr)
+		os.Exit(1)
+	}
+	if done {
+		os.Exit(0)
+	}
+
+	if opts.DumpTheme {
+		colors := collectColors(opts)
+		th := theme.Theme{Colors: colors, ChromaStyle: opts.ChromaStyle}
+		if err := th.Dump(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	code, err := run(opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	if code != 0 {
+		os.Exit(code)
+	}
+}
+
+func run(opts options) (int, error) {
+	// force lipgloss to truecolor when colors are enabled. revdiff's raw-ANSI
+	// helpers (style.ansiColor) always emit truecolor, but lipgloss respects
+	// the termenv-detected profile, which can downgrade to ANSI256 / ANSI in
+	// tmux or terminals where TERM/COLORTERM detection regresses. The mismatch
+	// makes lipgloss-rendered colors (pane borders, file tree fg) look wrong
+	// while raw-ANSI paths (line prefix wrap, overlay title injection) render
+	// correctly. Forcing truecolor unifies the two paths.
+	if !opts.NoColors {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+	}
+
+	store := annotation.NewStore()
+	hl := highlight.New(opts.ChromaStyle, !opts.NoColors)
+	km := keymap.LoadOrDefault(resolveKeysPath(opts))
+
+	var (
+		renderer           ui.Renderer
+		workDir            string
+		gitRoot            string
+		blamer             ui.Blamer
+		untrackedFn        func() ([]string, error)
+		untrackedRenamesFn func([]string) ([]diff.FileEntry, error)
+		commitLogger       diff.CommitLogger
+		vcsType            diff.VCSType
+		err                error
+	)
+
+	programOptions := []tea.ProgramOption{tea.WithAltScreen()}
+	if !opts.NoMouse {
+		programOptions = append(programOptions, tea.WithMouseCellMotion())
+	}
+	description, err := resolveDescription(opts)
+	if err != nil {
+		return 0, err
+	}
+
+	switch {
+	case opts.compareAbsOld != "":
+		renderer = diff.NewCompareReader(opts.compareAbsOld, opts.compareAbsNew)
+		workDir = filepath.Dir(opts.compareAbsNew)
+	case opts.Stdin:
+		var tty *os.File
+		renderer, tty, err = prepareStdinMode(opts, os.Stdin)
+		if err != nil {
+			return 0, err
+		}
+		defer tty.Close()
+		programOptions = append(programOptions, tea.WithInput(tty))
+	default:
+		var setup vcsSetup
+		setup, err = setupVCSRenderer(opts)
+		if err != nil {
+			return 0, err
+		}
+		renderer = setup.renderer
+		gitRoot = setup.gitRoot
+		workDir = setup.workDir
+		blamer = setup.blamer
+		untrackedFn = filterUntracked(setup.untrackedFn, opts.Include, opts.Exclude)
+		untrackedRenamesFn = setup.untrackedRenamesFn
+		commitLogger = setup.commitLogger
+		vcsType = setup.vcsType
+	}
+
+	if opts.Annotations != "" {
+		if perr := preloadAnnotations(opts.Annotations, store, renderer, opts.ref(), opts.Staged, untrackedFn, untrackedRenamesFn, workDir, os.Stderr); perr != nil {
+			return 0, perr
+		}
+	}
+
+	// construct the three style types per D15: Resolver first, Renderer from Resolver, SGR is zero-value
+	styleColors := optsToStyleColors(opts)
+	var res style.Resolver
+	if opts.NoColors {
+		res = style.PlainResolver()
+	} else {
+		res = style.NewResolver(styleColors)
+	}
+
+	themesDir := defaultThemesDir()
+	configPath := resolveFlagPath(os.Args[1:], "config", "REVDIFF_CONFIG", defaultConfigPath)
+	themes := &themeCatalog{
+		catalog:    theme.NewCatalog(themesDir),
+		configPath: configPath,
+	}
+
+	model, err := ui.NewModel(ui.ModelConfig{
+		Renderer:             renderer,
+		Store:                store,
+		Highlighter:          hl,
+		StyleResolver:        res,
+		StyleRenderer:        style.NewRenderer(res),
+		SGR:                  style.SGR{},
+		WordDiffer:           worddiff.New(),
+		Overlay:              overlay.NewManager(),
+		Themes:               themes,
+		Blamer:               blamer,
+		LoadUntracked:        untrackedFn,
+		LoadUntrackedRenames: untrackedRenamesFn,
+		Keymap:               km,
+		CommitLog:            commitLogger,
+		CommitsApplicable:    commitsApplicable(opts, commitLogger),
+		ReloadApplicable:     reloadApplicable(opts),
+		CompactApplicable:    compactApplicable(opts, renderer),
+		NoColors:             opts.NoColors,
+		MouseTracking:        !opts.NoMouse,
+		NoStatusBar:          opts.NoStatusBar,
+		NoConfirmDiscard:     opts.NoConfirmDiscard,
+		NoConfirmReload:      opts.NoConfirmReload,
+		Wrap:                 opts.Wrap,
+		WrapIndent:           opts.WrapIndent,
+		Collapsed:            opts.Collapsed,
+		Compact:              opts.Compact,
+		CompactContext:       opts.CompactContext,
+		CrossFileHunks:       opts.CrossFileHunks,
+		LineNumbers:          opts.LineNumbers,
+		ShowBlame:            opts.Blame,
+		ShowUntracked:        opts.startupUntracked(),
+		WordDiff:             opts.WordDiff,
+		VimMotion:            opts.VimMotion,
+		ReviewInfo: reviewInfoFromOptions(opts, reviewInfoInputs{
+			workDir:     workDir,
+			vcsType:     vcsType,
+			description: description,
+		}),
+		TabWidth:         opts.TabWidth,
+		Ref:              opts.ref(),
+		Staged:           opts.Staged,
+		TreeWidthRatio:   opts.TreeWidth,
+		Only:             opts.Only,
+		WorkDir:          workDir,
+		SourceEditor:     sourceEditorPolicy(opts, workDir),
+		ActiveThemeName:  themes.catalog.ActiveName(opts.Theme),
+		AnnotationMarker: opts.AnnotationMarker,
+		OutputPath:       opts.Output,
+		NewFileTree: func(entries []diff.FileEntry) ui.FileTreeComponent {
+			return sidepane.NewFileTree(entries)
+		},
+		ParseTOC: func(lines []diff.DiffLine, filename string) ui.TOCComponent {
+			toc := sidepane.ParseTOC(lines, filename)
+			if toc == nil {
+				return nil // collapse typed-nil *TOC into truly nil interface
+			}
+			return toc
+		},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("create model: %w", err)
+	}
+
+	p := tea.NewProgram(model, programOptions...)
+	finalModel, err := p.Run()
+	if err != nil {
+		return 0, fmt.Errorf("TUI error: %w", err)
+	}
+
+	// output annotations to stdout or file
+	m, ok := finalModel.(ui.Model)
+	if !ok {
+		return 0, nil
+	}
+	if m.Discarded() {
+		return 0, nil
+	}
+	output := m.Store().FormatOutput()
+	if output == "" {
+		return 0, nil
+	}
+
+	saveHistory(histReq{opts: opts, annotations: output, gitRoot: gitRoot, workDir: workDir, files: m.Store().Files()})
+
+	return writeAnnotationOutput(annotationOutputReq{opts: opts, output: output, stdout: os.Stdout})
+}
+
+type annotationOutputReq struct {
+	opts   options
+	output string
+	stdout io.Writer
+}
+
+func writeAnnotationOutput(r annotationOutputReq) (int, error) {
+	code := annotationExitCode(r.opts.ExitCodeOnAnnotations, r.output)
+	if r.opts.Output != "" {
+		if err := fsutil.AtomicWriteFile(r.opts.Output, []byte(r.output)); err != nil {
+			return 0, fmt.Errorf("write output: %w", err)
+		}
+		return code, nil
+	}
+	if _, err := fmt.Fprint(r.stdout, r.output); err != nil {
+		return 0, fmt.Errorf("write output: %w", err)
+	}
+	return code, nil
+}
+
+func annotationExitCode(enabled bool, output string) int {
+	if enabled && output != "" {
+		return exitCodeAnnotations
+	}
+	return 0
+}
+
+// reloadApplicable returns false when --stdin is active: the stream has already
+// been consumed and cannot be re-read. All other modes support reload.
+func reloadApplicable(opts options) bool {
+	return !opts.Stdin
+}
+
+func sourceEditorPolicy(opts options, workDir string) ui.SourceEditorPolicy {
+	switch {
+	case opts.Stdin:
+		return ui.SourceEditorPolicy{} // unsupported
+	case opts.compareAbsNew != "":
+		// Always prefer --compare-new in compare mode.
+		return ui.SourceEditorPolicy{
+			Available: true,
+			Root:      filepath.Dir(opts.compareAbsNew),
+			ExactPath: opts.compareAbsNew,
+		}
+	case workDir != "":
+		worktreeReview := !opts.Staged && opts.ref() == ""
+		return ui.SourceEditorPolicy{
+			Available: true,
+			Root:      workDir,
+			// When reviewing worktree changes, reload after edits and disallow
+			// editing annotated files because edits can orphan comments.
+			ReloadAfterCleanExit:         worktreeReview,
+			DisallowAnnotatedFileEditing: worktreeReview,
+		}
+	default:
+		return ui.SourceEditorPolicy{}
+	}
+}
+
+// resolveKeysPath returns the effective keybindings file path, falling back
+// to defaultKeysPath() when --keys was not set. Extracted from run() to keep
+// its cyclomatic complexity under the gocyclo limit after compare-mode
+// dispatch was added.
+func resolveKeysPath(opts options) string {
+	if opts.Keys == "" {
+		return defaultKeysPath()
+	}
+	return opts.Keys
+}
+
+// commitsApplicable returns true when the unified info popup can include a
+// commit-log section: a VCS-backed log source must be present and the mode
+// must be ref-based (no stdin, staged, all-files, or empty ref). Computed
+// once in the composition root so the Model does not re-derive from CLI
+// flags. --only is fine when combined with a ref in a real repo; the empty
+// ref check excludes the standalone --only / FileReader case where the
+// commitLogger is nil anyway.
+func commitsApplicable(opts options, cl diff.CommitLogger) bool {
+	if cl == nil {
+		return false
+	}
+	if opts.Stdin || opts.Staged || opts.AllFiles {
+		return false
+	}
+	return opts.ref() != ""
+}
+
+// compactApplicable returns true when the current invocation can shrink the
+// VCS diff via the compact toggle. false for stdin (no VCS), all-files (no
+// hunks to contextualize), and standalone file review via FileReader (pure
+// context-only source with no underlying VCS). All other renderer shapes —
+// *Git / *Hg / *Jj, with or without Fallback / Include / Exclude wrappers —
+// qualify because the wrapper chain delegates FileDiff straight through to
+// a VCS that honors contextLines.
+func compactApplicable(opts options, r ui.Renderer) bool {
+	if opts.Stdin || opts.AllFiles {
+		return false
+	}
+	if _, ok := r.(*diff.FileReader); ok {
+		return false
+	}
+	return true
+}
