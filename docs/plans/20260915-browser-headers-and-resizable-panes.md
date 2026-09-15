@@ -332,27 +332,27 @@ wins on the next launch, as with every other config-file key.
 - Create: `app/configstore.go`
 - Create: `app/configstore_test.go`
 
-- [ ] extract the key-agnostic core of `patchConfigTheme` into a reusable
+- [x] extract the key-agnostic core of `patchConfigTheme` into a reusable
       `patchConfigKey(path, key, value string) error`, with `scanThemeLines`
       becoming `scanConfigKeyLines(lines []string, key string)`; the
       stray-healing behaviour and the default-scope insertion rule carry over
       unchanged
-- [ ] keep `themeCatalog.patchConfigTheme(name string)` as a thin wrapper over
+- [x] keep `themeCatalog.patchConfigTheme(name string)` as a thin wrapper over
       `patchConfigKey` so the existing tests in `app/themes_test.go` keep
       working untouched
-- [ ] add `configStore` in `app/configstore.go` holding the config path, with
+- [x] add `configStore` in `app/configstore.go` holding the config path, with
       `PersistBrowserWidths(widths [3]int) error` formatting `"a,b,c"` and
       calling `patchConfigKey(..., "browser-widths", ...)`
-- [ ] add a compile-time assertion that `*configStore` satisfies
+- [x] add a compile-time assertion that `*configStore` satisfies
       `ui.BrowserWidthsPersister`
-- [ ] write a test that persisting into a config file that has no
+- [x] write a test that persisting into a config file that has no
       `browser-widths` line inserts one in the default scope
-- [ ] write a test that persisting over an existing `browser-widths` line
+- [x] write a test that persisting over an existing `browser-widths` line
       replaces it in place
-- [ ] write a test that a value written by `PersistBrowserWidths` round-trips
+- [x] write a test that a value written by `PersistBrowserWidths` round-trips
       through `parseBrowserWidths`
-- [ ] write a test that an empty config path is a silent no-op
-- [ ] run `go test ./app/...` — must pass before task 7
+- [x] write a test that an empty config path is a silent no-op
+- [x] run `go test ./app/...` — must pass before task 7
 
 ### Task 7: Wire the persister at the composition root
 
