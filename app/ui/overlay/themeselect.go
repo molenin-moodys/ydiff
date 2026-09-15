@@ -180,7 +180,10 @@ func (t *themeSelectOverlay) maxVisible() int {
 }
 
 func (t *themeSelectOverlay) handleKey(msg tea.KeyMsg, action keymap.Action) Outcome {
-	if action == keymap.ActionThemeSelect {
+	// toggle-close on the same key that opened it, in either the review
+	// screen's namespace (ActionThemeSelect) or the browser's (mirrors
+	// helpOverlay's dual-namespace ActionHelp/ActionBrowserHelp handling).
+	if action == keymap.ActionThemeSelect || action == keymap.ActionBrowserThemeSelect {
 		return Outcome{Kind: OutcomeThemeCanceled}
 	}
 

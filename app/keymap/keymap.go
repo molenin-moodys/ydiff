@@ -103,6 +103,14 @@ const (
 	// app/ui/overlay/favorites.go.
 	ActionBrowserToggleFavorite Action = "browser_toggle_favorite"
 	ActionBrowserFavorites      Action = "browser_favorites"
+
+	// ActionBrowserThemeSelect opens the same theme-selector popup the
+	// review screen uses (overlay.KindThemeSelect is screen-agnostic: it
+	// dispatches its own navigation off raw key types, not an Action
+	// namespace, and only special-cases ActionThemeSelect/
+	// ActionBrowserThemeSelect to toggle-close — see
+	// app/ui/overlay/themeselect.go).
+	ActionBrowserThemeSelect Action = "browser_theme_select"
 )
 
 // SectionPane is the help section name for pane-related keybindings.
@@ -143,6 +151,7 @@ var validBrowserActions = map[Action]bool{
 	ActionBrowserToggleHidden: true, ActionBrowserFocusPane: true,
 	ActionBrowserQuit: true, ActionBrowserHelp: true,
 	ActionBrowserToggleFavorite: true, ActionBrowserFavorites: true,
+	ActionBrowserThemeSelect: true,
 }
 
 // isBrowserAction reports whether a is a browser action, as opposed to a
@@ -389,6 +398,7 @@ func defaultBrowserBindings() map[string]Action {
 		"?":      ActionBrowserHelp,
 		"ctrl+f": ActionBrowserToggleFavorite,
 		"f":      ActionBrowserFavorites,
+		"T":      ActionBrowserThemeSelect,
 	}
 }
 

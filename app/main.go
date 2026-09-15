@@ -278,7 +278,7 @@ func buildEntryModel(opts options) (entryModelResult, error) {
 	var entryModel tea.Model
 	switch decision.screen {
 	case routeBrowser:
-		root, navCmd := buildRootBrowser(opts, model, km, res, decision.browserScope, configPath)
+		root, navCmd := buildRootBrowser(opts, model, km, res, decision.browserScope, configPath, themes)
 		entryModel = initCmdModel{Model: root, extra: navCmd}
 	default:
 		entryModel = ui.NewRootReview(model)
@@ -455,8 +455,13 @@ func browserFallbackSetup() vcsSetup {
 // by ~/.config/ydiff/favorites, unconditionally — unlike configPath, that
 // path resolution failure is handled internally by the favorites package
 // itself (List/Toggle/Remove degrade gracefully), so there is no
-// composition-root-level guard to mirror.
-func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope, configPath string) (ui.RootModel, tea.Cmd) {
+// composition-root-level guard to mirror. A non-nil themes attaches the
+// same *themeCatalog the review screen uses as the browser's theme
+// catalog too (T opens the shared theme-selector popup), positioning its
+// cursor via themes.catalog.ActiveName(opts.Theme) and honoring
+// opts.NoColors exactly as the review screen's Model.applyTheme does; nil
+// themes leaves T a no-op.
+func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope, configPath string, themes *themeCatalog) (ui.RootModel, tea.Cmd) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		cwd = "."
@@ -476,6 +481,9 @@ func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res styl
 		root = root.WithBrowserWidthsPersister(&configStore{path: configPath})
 	}
 	root = root.WithFavoritesService(favorites.New(""))
+	if themes != nil {
+		root = root.WithThemeCatalog(themes, themes.catalog.ActiveName(opts.Theme), opts.NoColors)
+	}
 	return root, navCmd
 }
 

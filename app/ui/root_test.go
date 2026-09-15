@@ -591,3 +591,188 @@ func TestRootModel_Browser_FavoritesListErrorSetsHintNotPanic(t *testing.T) {
 	root = updated.(RootModel)
 	assert.Contains(t, root.browser.hint, "boom")
 }
+
+// stubThemeCatalog is a minimal in-memory ThemeCatalog for tests — no
+// filesystem, just observable Entries/Resolve/Persist behavior. entriesErr
+// and persistErr let a test force each method's error path.
+type stubThemeCatalog struct {
+	entries    []ThemeEntry
+	specs      map[string]ThemeSpec
+	entriesErr error
+	persistErr error
+	persisted  []string
+}
+
+func (f *stubThemeCatalog) Entries() ([]ThemeEntry, error) {
+	if f.entriesErr != nil {
+		return nil, f.entriesErr
+	}
+	return f.entries, nil
+}
+
+func (f *stubThemeCatalog) Resolve(name string) (ThemeSpec, bool) {
+	spec, ok := f.specs[name]
+	return spec, ok
+}
+
+func (f *stubThemeCatalog) Persist(name string) error {
+	if f.persistErr != nil {
+		return f.persistErr
+	}
+	f.persisted = append(f.persisted, name)
+	return nil
+}
+
+func TestRootModel_Browser_TOpensThemeSelector(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	cat := &stubThemeCatalog{entries: []ThemeEntry{{Name: "nord"}, {Name: "dracula"}}}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "", false)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('T'))
+	root = updated.(RootModel)
+
+	require.True(t, root.browser.overlay.Active())
+	view := root.browser.View()
+	assert.Contains(t, view, "nord")
+	assert.Contains(t, view, "dracula")
+}
+
+func TestRootModel_Browser_TNilCatalogIsNoOp(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+
+	var updated tea.Model
+	assert.NotPanics(t, func() {
+		updated, _ = root.Update(keyMsg('T'))
+	})
+	root = updated.(RootModel)
+	assert.False(t, root.browser.overlay.Active(), "T with no catalog must be a no-op, not an empty popup")
+}
+
+func TestRootModel_Browser_ThemeArrowPreviewsWithoutPersisting(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	nordColors := style.Colors{Accent: "#ff0000"}
+	cat := &stubThemeCatalog{
+		entries: []ThemeEntry{{Name: "nord"}, {Name: "dracula"}},
+		specs:   map[string]ThemeSpec{"dracula": {Colors: nordColors}},
+	}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "nord", false)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('T'))
+	root = updated.(RootModel)
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyDown})
+	root = updated.(RootModel)
+
+	assert.Empty(t, cat.persisted, "moving the cursor must only preview, never persist")
+	assert.True(t, root.browser.overlay.Active(), "preview must not close the popup")
+}
+
+func TestRootModel_Browser_ThemeEnterConfirmsAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	cat := &stubThemeCatalog{
+		entries: []ThemeEntry{{Name: "nord"}},
+		specs:   map[string]ThemeSpec{"nord": {Colors: style.Colors{Accent: "#00ff00"}}},
+	}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "", false)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('T'))
+	root = updated.(RootModel)
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+
+	assert.False(t, root.browser.overlay.Active(), "Enter must close the popup")
+	assert.Equal(t, []string{"nord"}, cat.persisted)
+}
+
+func TestRootModel_Browser_ThemeEscCancelsWithoutPersisting(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	cat := &stubThemeCatalog{
+		entries: []ThemeEntry{{Name: "nord"}},
+		specs:   map[string]ThemeSpec{"nord": {Colors: style.Colors{Accent: "#00ff00"}}},
+	}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "", false)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('T'))
+	root = updated.(RootModel)
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyDown}) // preview
+	root = updated.(RootModel)
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	root = updated.(RootModel)
+
+	assert.False(t, root.browser.overlay.Active(), "Esc must close the popup")
+	assert.Empty(t, cat.persisted, "Esc must not persist the previewed theme")
+}
+
+func TestRootModel_Browser_ThemeNoColorsOverridesResolver(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	cat := &stubThemeCatalog{
+		entries: []ThemeEntry{{Name: "nord"}},
+		specs:   map[string]ThemeSpec{"nord": {Colors: style.Colors{Accent: "#00ff00"}}},
+	}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "", true) // noColors=true
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('T'))
+	root = updated.(RootModel)
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+
+	assert.Equal(t, style.PlainResolver(), root.browser.resolver,
+		"noColors must keep the resolver plain even after confirming a theme")
+}
+
+func TestRootModel_Browser_ThemeEntriesErrorSetsHintNotPanic(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	cat := &stubThemeCatalog{entriesErr: errors.New("boom")}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithThemeCatalog(cat, "", false)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+
+	var updated2 tea.Model
+	assert.NotPanics(t, func() {
+		updated2, _ = root.Update(keyMsg('T'))
+	})
+	root = updated2.(RootModel)
+	assert.Contains(t, root.browser.hint, "boom")
+	assert.False(t, root.browser.overlay.Active())
+}

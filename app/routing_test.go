@@ -13,6 +13,7 @@ import (
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/highlight"
 	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/theme"
 	"github.com/molenin-moodys/ydiff/app/ui"
 	"github.com/molenin-moodys/ydiff/app/ui/overlay"
 	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
@@ -187,7 +188,7 @@ func TestBuildRootBrowser_OutsideRepo_OpensWithEmptyChangedPane(t *testing.T) {
 	require.NotNil(t, setup.renderer)
 
 	review := newTestReviewModel(t)
-	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "")
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "", nil)
 
 	entry := initCmdModel{Model: root, extra: navCmd}
 	msgs := drainCmd(entry.Init())
@@ -214,7 +215,7 @@ func TestBuildRootBrowser_ConfigPath_PersistsDraggedWidths(t *testing.T) {
 	configPath := dir + "/config"
 
 	review := newTestReviewModel(t)
-	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, configPath)
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, configPath, nil)
 
 	entry := initCmdModel{Model: root, extra: navCmd}
 	msgs := drainCmd(entry.Init())
@@ -259,7 +260,7 @@ func TestBuildRootBrowser_AttachesFavoritesService(t *testing.T) {
 	t.Chdir(dir)
 
 	review := newTestReviewModel(t)
-	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "")
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "", nil)
 
 	entry := initCmdModel{Model: root, extra: navCmd}
 	msgs := drainCmd(entry.Init())
@@ -275,6 +276,41 @@ func TestBuildRootBrowser_AttachesFavoritesService(t *testing.T) {
 	data, err := os.ReadFile(favPath)
 	require.NoError(t, err, "buildRootBrowser must have attached a favorites.Service that wrote the favorites file")
 	assert.Contains(t, string(data), dir)
+
+	_, ok := unwrapRootModel(updated)
+	require.True(t, ok)
+}
+
+// TestBuildRootBrowser_AttachesThemeCatalog verifies buildRootBrowser wires a
+// real *themeCatalog into the browser screen: pressing T through the same
+// public Update path a real keypress takes must open the theme-selector
+// popup listing the bundled themes, and confirming one with Enter must
+// persist it to the config file — the same catalog, the same persistence
+// mechanism the review screen's theme selector uses.
+func TestBuildRootBrowser_AttachesThemeCatalog(t *testing.T) {
+	themesDir := t.TempDir()
+	cat := theme.NewCatalog(themesDir)
+	require.NoError(t, cat.InitBundled())
+	configPath := t.TempDir() + "/config"
+	themes := &themeCatalog{catalog: cat, configPath: configPath}
+
+	review := newTestReviewModel(t)
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "", themes)
+
+	entry := initCmdModel{Model: root, extra: navCmd}
+	msgs := drainCmd(entry.Init())
+	var updated tea.Model = root
+	for _, msg := range msgs {
+		updated, _ = updated.Update(msg)
+	}
+	updated, _ = updated.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	updated, _ = updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}})
+	updated, _ = updated.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err, "buildRootBrowser must have attached a theme catalog that persisted the choice")
+	assert.Contains(t, string(data), "theme =")
 
 	_, ok := unwrapRootModel(updated)
 	require.True(t, ok)

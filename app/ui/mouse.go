@@ -974,6 +974,7 @@ var browserHelpEntries = []browserHelpEntry{
 	{keymap.ActionBrowserHelp, "show help"},
 	{keymap.ActionBrowserToggleFavorite, "star/unstar current directory"},
 	{keymap.ActionBrowserFavorites, "open favorites (enter: jump, delete: remove)"},
+	{keymap.ActionBrowserThemeSelect, "open theme selector"},
 }
 
 // browserMouseHelpEntries is the browser help overlay's "Mouse" section —
