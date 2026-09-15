@@ -6,7 +6,7 @@ package mocks
 import (
 	"sync"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/diff"
 )
 
 // styleRendererMock is a mock implementation of ui.styleRenderer.

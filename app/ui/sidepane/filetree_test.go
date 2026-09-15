@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // fileEntries is a test helper converting a slice of file paths to diff.FileEntry.

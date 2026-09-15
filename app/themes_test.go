@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/theme"
+	"github.com/molenin-moodys/ydiff/app/theme"
 )
 
 // testThemeContent returns a valid theme file string with the given name.

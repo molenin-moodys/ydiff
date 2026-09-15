@@ -16,8 +16,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/umputun/revdiff/app/fsutil"
-	"github.com/umputun/revdiff/themes"
+	"github.com/molenin-moodys/ydiff/app/fsutil"
+	"github.com/molenin-moodys/ydiff/themes"
 )
 
 // themeInfo holds classification metadata for a theme in an ordered listing.

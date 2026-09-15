@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // FileTree manages the list of changed files grouped by directory.

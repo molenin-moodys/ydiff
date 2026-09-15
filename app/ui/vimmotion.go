@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/keymap"
 )
 
 // maxVimCount caps the count prefix accumulator. Matches typical vim buffer

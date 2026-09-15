@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // View renders the full TUI.

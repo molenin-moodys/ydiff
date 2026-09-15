@@ -3,9 +3,9 @@ package ui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
 )
 
 // handleAnnotNav jumps to the next or previous annotation in the flat

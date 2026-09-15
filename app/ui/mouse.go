@@ -5,8 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
 )
 
 // wheelStep is the number of lines one wheel notch scrolls by. Shift+wheel

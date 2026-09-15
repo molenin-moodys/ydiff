@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui"
+	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui"
 )
 
 // maxAnnotationsFileSize caps the bytes read from --annotations. Annotation

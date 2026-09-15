@@ -9,7 +9,7 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/diff"
 )
 
 // chromaFallbackStyle is the name of the Chroma style that doubles as styles.Fallback.

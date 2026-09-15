@@ -3,8 +3,8 @@ package ui
 import (
 	"log"
 
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // themePreviewSession holds app-side state for an active theme selector session.

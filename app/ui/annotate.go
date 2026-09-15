@@ -10,10 +10,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // annotKeyFile is the lookup key for file-level annotations in wrappedAnnotationLineCount.

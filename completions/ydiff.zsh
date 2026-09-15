@@ -1,7 +1,7 @@
-#compdef revdiff
+#compdef ydiff
 
-# zsh completion for revdiff (generated via go-flags)
-_revdiff() {
+# zsh completion for ydiff (generated via go-flags)
+_ydiff() {
     local -a lines
     lines=(${(f)"$(GO_FLAGS_COMPLETION=verbose "${words[1]}" "${(@)words[2,$CURRENT]}" 2>/dev/null)"})
     if (( ${#lines} )); then
@@ -25,4 +25,4 @@ _revdiff() {
     fi
 }
 
-_revdiff "$@"
+_ydiff "$@"

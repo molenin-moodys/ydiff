@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/mocks"
+	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/mocks"
 )
 
 func writeTempAnnotations(t *testing.T, body string) string {

@@ -11,8 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/worddiff"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/worddiff"
 )
 
 // loadFiles returns a command that fetches the list of changed files from the renderer.

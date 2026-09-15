@@ -5,10 +5,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
 )
 
 // helpKeyDisplay maps bubbletea key names to user-friendly display names.

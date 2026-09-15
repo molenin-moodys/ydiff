@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/keymap"
 )
 
 // keyMsg builds a bubbletea KeyMsg for a single rune. Matches the style of

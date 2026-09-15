@@ -3,7 +3,7 @@ package ui
 import (
 	"strings"
 
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
 )
 
 // scrollbar glyphs. track stays the lipgloss right-border default (│),

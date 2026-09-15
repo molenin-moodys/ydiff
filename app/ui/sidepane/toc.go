@@ -7,8 +7,8 @@ import (
 
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // TOC manages the markdown table-of-contents navigation pane.

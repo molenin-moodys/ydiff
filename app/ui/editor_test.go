@@ -11,15 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/editor"
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/mocks"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
-	"github.com/umputun/revdiff/app/ui/style"
-	"github.com/umputun/revdiff/app/ui/worddiff"
+	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/editor"
+	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/mocks"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
+	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/ui/worddiff"
 )
 
 // mockEditor returns a configured ExternalEditorMock whose Command returns a

@@ -3,7 +3,7 @@ package style
 import (
 	"strings"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/diff"
 )
 
 // Renderer produces complete rendered strings for specific UI widgets

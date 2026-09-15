@@ -3,7 +3,7 @@ package main
 import (
 	"path/filepath"
 
-	"github.com/umputun/revdiff/app/history"
+	"github.com/molenin-moodys/ydiff/app/history"
 )
 
 type histReq struct {

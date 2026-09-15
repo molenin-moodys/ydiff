@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/diff"
 )
 
 // fullColorsForTesting has every field populated — exercises the primary resolution path.

@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui"
 )
 
 const defaultScratchBufferName = "scratch-buffer"

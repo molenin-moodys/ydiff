@@ -253,15 +253,15 @@ default theme `revdiff` -> `ydiff`.
 - Modify: 82 `.go` files carrying the import path
 - Modify: `Makefile`, `.goreleaser.yml`, `.github/workflows/*`, `completions/*`
 
-- [ ] change the module path in `go.mod` to `github.com/molenin-moodys/ydiff`, keeping
+- [x] change the module path in `go.mod` to `github.com/molenin-moodys/ydiff`, keeping
       upstream's `go 1.26` directive
-- [ ] rewrite the import path in all 82 files; **leave the main package in `app/`** — do not
+- [x] rewrite the import path in all 82 files; **leave the main package in `app/`** — do not
       move it to `app/ydiff/`, which would conflict with every future upstream change
-- [ ] rename the binary to `ydiff` in `Makefile` (`go build ... ./app`), `.goreleaser.yml`,
+- [x] rename the binary to `ydiff` in `Makefile` (`go build ... ./app`), `.goreleaser.yml`,
       CI workflows and shell completions
-- [ ] run `go mod vendor` and verify the vendored tree is consistent
-- [ ] update inherited tests asserting on the binary or module name
-- [ ] run `go build ./app` and `go test ./...` — suite green before task 3
+- [x] run `go mod vendor` and verify the vendored tree is consistent
+- [x] update inherited tests asserting on the binary or module name
+- [x] run `go build ./app` and `go test ./...` — suite green before task 3
 
 ### Task 3: Triage inherited non-code assets
 

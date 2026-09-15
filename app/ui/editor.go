@@ -11,8 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/editor"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/editor"
 )
 
 // ExternalEditor abstracts editor processes used by the UI.

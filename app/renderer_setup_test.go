@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui"
-	"github.com/umputun/revdiff/app/ui/mocks"
+	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/ui"
+	"github.com/molenin-moodys/ydiff/app/ui/mocks"
 )
 
 func TestMakeGitRenderer_WithOnly(t *testing.T) {

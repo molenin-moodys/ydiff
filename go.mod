@@ -1,4 +1,4 @@
-module github.com/umputun/revdiff
+module github.com/molenin-moodys/ydiff
 
 go 1.26
 

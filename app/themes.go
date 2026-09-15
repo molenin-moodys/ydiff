@@ -11,11 +11,11 @@ import (
 
 	"github.com/muesli/termenv"
 
-	"github.com/umputun/revdiff/app/fsutil"
-	"github.com/umputun/revdiff/app/highlight"
-	"github.com/umputun/revdiff/app/theme"
-	"github.com/umputun/revdiff/app/ui"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/molenin-moodys/ydiff/app/fsutil"
+	"github.com/molenin-moodys/ydiff/app/highlight"
+	"github.com/molenin-moodys/ydiff/app/theme"
+	"github.com/molenin-moodys/ydiff/app/ui"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 const (

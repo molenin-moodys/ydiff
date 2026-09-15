@@ -6,7 +6,7 @@ package mocks
 import (
 	"sync"
 
-	"github.com/umputun/revdiff/app/ui/worddiff"
+	"github.com/molenin-moodys/ydiff/app/ui/worddiff"
 )
 
 // wordDifferMock is a mock implementation of ui.wordDiffer.

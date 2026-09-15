@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/umputun/revdiff/app/fsutil"
+	"github.com/molenin-moodys/ydiff/app/fsutil"
 )
 
 // Annotation represents a user comment on a specific diff line.
