@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -118,13 +119,12 @@ func TestRenderBrowserView_ThreeColumns(t *testing.T) {
 	out := RenderBrowserView(p)
 	plain := ansi.Strip(out)
 
-	// parent column: shows the containing directory's name and highlights
-	// the current directory among its siblings, with no cursor marker.
-	assert.Contains(t, plain, "proj", "parent column header names the directory it lists")
+	// parent column: no directory-name header (redundant with the path
+	// header above the columns); highlights the current directory among its
+	// siblings, with no cursor marker.
 	assert.Contains(t, plain, "sibling", "parent column lists the current directory's sibling")
 
-	// middle column: the live directory's own entries.
-	assert.Contains(t, plain, "current", "middle column header names the current directory")
+	// middle column: the live directory's own entries, no header row.
 	assert.Contains(t, plain, "readme.md")
 	assert.Contains(t, plain, "sub")
 
@@ -286,7 +286,7 @@ func TestRenderBrowserView_NarrowTerminalTiers(t *testing.T) {
 		p := baseParams(t, fx.currentDir)
 		p.Width = 100
 		out := ansi.Strip(RenderBrowserView(p))
-		assert.Contains(t, out, "proj", "parent column present")
+		assert.Contains(t, out, "sibling", "parent column present")
 		assert.Contains(t, out, "readme.md", "current column present")
 		assert.Contains(t, out, "changed - uncommitted", "changed column present")
 	})
@@ -391,6 +391,58 @@ func TestRenderBrowserView_LongEntryNameTruncatesWithoutPanic(t *testing.T) {
 			assert.LessOrEqual(t, lipgloss.Width(line), p.Width, "truncated line must still fit the column width")
 		}
 	})
+}
+
+// TestRenderBrowserView_NoDirectoryNameHeaderRow guards against the
+// regression this task fixes: the middle column no longer prints its own
+// directory's name as a (non-selectable, misleadingly header-like) row. The
+// fixture's current directory is named "fixtures" — exactly the kind of name
+// that used to appear as the middle column's header line — and holds a
+// single, differently-named file. This checks renderCurrentColumn directly:
+// the parent column legitimately lists "fixtures" as the (highlighted) entry
+// for the current directory, which is real content, not a header, so that
+// column is intentionally not asserted on here.
+func TestRenderBrowserView_NoDirectoryNameHeaderRow(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "parent")
+	current := filepath.Join(parent, "fixtures")
+	require.NoError(t, os.MkdirAll(current, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(current, "a.txt"), []byte("x"), 0o600))
+
+	nav := newLoadedNav(t, current)
+	p := baseParams(t, current)
+	p.Nav = nav
+
+	out := ansi.Strip(p.renderCurrentColumn(20, 10, true))
+	assert.NotContains(t, out, "fixtures", "the current column must not print its own directory name as a header row")
+	assert.Contains(t, out, "a.txt", "the current column still shows its real entries")
+}
+
+// TestRenderBrowserView_CurrentColumnUsesFullHeight asserts the current
+// column now renders ph entry rows (no header row eating one), where it
+// previously rendered ph-1.
+func TestRenderBrowserView_CurrentColumnUsesFullHeight(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "parent")
+	current := filepath.Join(parent, "current")
+	require.NoError(t, os.MkdirAll(current, 0o755))
+	for i := range 20 {
+		require.NoError(t, os.WriteFile(filepath.Join(current, fmt.Sprintf("file-%02d.txt", i)), []byte("x"), 0o600))
+	}
+
+	nav := newLoadedNav(t, current)
+	p := baseParams(t, current)
+	p.Nav = nav
+
+	const ph = 5
+	out := ansi.Strip(p.renderCurrentColumn(20, ph, true))
+	lines := strings.Split(out, "\n")
+	// the bordered box adds a top and bottom border row around its content.
+	content := lines[1 : len(lines)-1]
+	require.Len(t, content, ph, "current column content must fill the full height with entry rows, no header row")
+	for _, line := range content {
+		assert.Contains(t, line, "file-", "every content row is an entry row, not a header or blank filler")
+	}
 }
 
 func TestDistributeWidths(t *testing.T) {

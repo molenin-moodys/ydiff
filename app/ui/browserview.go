@@ -274,7 +274,6 @@ func (p BrowserViewParams) currentRows() []rowSpec {
 // other column.
 func (p BrowserViewParams) renderParentColumn(width, height int) string {
 	col := p.Nav.Parent()
-	header := columnHeader(col.Listing.Dir)
 
 	rows := p.parentRows()
 	highlightIdx := -1
@@ -284,22 +283,21 @@ func (p BrowserViewParams) renderParentColumn(width, height int) string {
 			break
 		}
 	}
-	visible := visibleWindow(rows, max(height-1, 0), highlightIdx)
+	visible := visibleWindow(rows, height, highlightIdx)
 
 	// the parent column never has a cursor, so its border never renders active.
-	return p.renderColumnBox(header, col, visible, width, height, false)
+	return p.renderColumnBox(col, visible, width, height, false)
 }
 
 // renderCurrentColumn renders the middle column: the live directory the
 // cursor moves within, after the substring filter (if active).
 func (p BrowserViewParams) renderCurrentColumn(width, height int, active bool) string {
 	col := p.Nav.Current()
-	header := columnHeader(p.Nav.Path())
 
 	rows := p.currentRows()
-	visible := visibleWindow(rows, max(height-1, 0), p.Nav.Cursor())
+	visible := visibleWindow(rows, height, p.Nav.Cursor())
 
-	return p.renderColumnBox(header, col, visible, width, height, active)
+	return p.renderColumnBox(col, visible, width, height, active)
 }
 
 // renderChangedColumn renders the right column's frame: a header naming the
@@ -330,14 +328,14 @@ func (p BrowserViewParams) renderChangedColumn(width, height int, active bool) s
 	return p.boxStyle(active).Width(width).Height(height).Render(content)
 }
 
-// renderColumnBox assembles one Miller column's box: a header line, then
-// either the loading placeholder (task 13's Column.Pending), the directory's
-// inline error (task 12), an empty-directory message, or the rendered rows —
-// wrapped in the theme's tree-pane border style so the browser and the
-// review screen's file tree look like one application.
-func (p BrowserViewParams) renderColumnBox(header string, col *browser.Column, rows []rowSpec, width, height int, active bool) string {
-	headerLine := p.Resolver.Style(style.StyleKeyDirEntry).Render(truncateLeftToWidth(header, width))
-	lines := []string{headerLine}
+// renderColumnBox assembles one Miller column's box: either the loading
+// placeholder (task 13's Column.Pending), the directory's inline error (task
+// 12), an empty-directory message, or the rendered rows — wrapped in the
+// theme's tree-pane border style so the browser and the review screen's file
+// tree look like one application. There is no per-column header line: the
+// directory name is redundant with the path header above the columns.
+func (p BrowserViewParams) renderColumnBox(col *browser.Column, rows []rowSpec, width, height int, active bool) string {
+	var lines []string
 
 	switch {
 	case col.Pending():
@@ -446,11 +444,6 @@ func highlightMatchInline(name string, m browser.Match, matchFg, restoreFg style
 	return b.String()
 }
 
-// columnHeader returns the display name for a column's header line: the
-// base name of dir, or dir itself for "." and the filesystem root (whose
-// base name is "/" or a drive letter — filepath.Base already returns
-// something sensible there, this only guards the "." case Base produces for
-// a relative empty path).
 // truncateRightToWidth right-truncates s with a trailing "…" so it fits in
 // budget visual columns, preserving the meaningful start (e.g. an "error: "
 // prefix) instead of the tail that truncateLeftToWidth keeps. Returns s
@@ -478,14 +471,6 @@ func truncateRightToWidth(s string, budget int) string {
 		cutIdx = i + len(string(r))
 	}
 	return s[:cutIdx] + "…"
-}
-
-func columnHeader(dir string) string {
-	base := filepath.Base(dir)
-	if base == "." {
-		return dir
-	}
-	return base
 }
 
 // statusBarText builds the browser status bar: current path and active
