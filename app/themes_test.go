@@ -177,7 +177,7 @@ func TestListThemesOutput(t *testing.T) {
 	require.NoError(t, theme.NewCatalog(themesDir).InitBundled())
 
 	names := testListThemeFiles(t, themesDir)
-	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "ydiff"}, names)
+	assert.Equal(t, []string{"basic", "catppuccin-latte", "catppuccin-mocha", "dracula", "gruvbox", "nord", "solarized-dark", "yazi", "ydiff"}, names)
 }
 
 func TestCollectColors(t *testing.T) {

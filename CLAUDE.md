@@ -42,7 +42,7 @@ ydiff is a fork of [revdiff](https://github.com/umputun/revdiff) — see `UPSTRE
 - Precedence: CLI flags > config file > env vars > built-in defaults. This is a quirk of `parseArgs`'s two-pass go-flags setup (config file is parsed into `opts` via `IniParser.ParseFile` *before* `p.ParseArgs` runs; go-flags only applies an `env` tag's value when the field is still at its zero value, so a config-file value set in the first pass suppresses the env var in the second) — pre-existing upstream behavior, not something this fork changed. The explicit CLI flag always wins over both.
 - `--dump-config` outputs current defaults, `--config` overrides path
 - `no-ini:"true"` tag excludes fields from config file (used for --config, --dump-config, --dump-theme, --list-themes, --init-themes, --version)
-- Themes dir: `~/.config/ydiff/themes/` with 7 bundled themes, auto-created on first run
+- Themes dir: `~/.config/ydiff/themes/` with 9 bundled themes, auto-created on first run
 - `--theme NAME` loads theme; `--dump-theme` exports resolved colors; `--list-themes` lists available; `--init-themes` re-creates bundled
 - Theme precedence: `--theme` overwrites all 23 color fields + chroma-style, ignoring `--color-*` flags or env vars
 - Theme values applied via `applyTheme()` in `themes.go` which overwrites `opts.Colors.*` after `parseArgs()`. `colorFieldPtrs(opts)` is the single source of truth for color key → struct field mapping — adding a new color requires changes in `theme.go` colorKeys + options struct + `colorFieldPtrs()` in `themes.go`
