@@ -373,18 +373,33 @@ wins on the next launch, as with every other config-file key.
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] build: `go build ./...`
-- [ ] no browser column shows a directory name as a header row any more
-- [ ] the changed-files pane still shows `changed - <scope>` and clicking it
-      still toggles the scope
-- [ ] clicking an entry in either pane selects the right entry, including when
-      the pane is scrolled
-- [ ] dragging either divider resizes the panes and respects `minColumnWidth`
-- [ ] the dragged widths land in the config file and are picked up on the next
-      launch
-- [ ] run the full suite: `go test ./...` — the only failure permitted is the
-      pre-existing `TestGit_FileBlame_UsesIndexForStagedDiffs`
-- [ ] `go vet ./...` clean; report `golangci-lint` as skipped (not installed)
+- [x] build: `go build ./...`
+- [x] no browser column shows a directory name as a header row any more
+      (verified: `columnHeader`/`header string` no longer exist anywhere in
+      `app/ui/browserview.go`)
+- [x] the changed-files pane still shows `changed - <scope>` and clicking it
+      still toggles the scope (verified via existing `browserHitChangedHeader`
+      code path and passing `TestBrowserMouse_*Changed*`/mouse tests)
+- [x] clicking an entry in either pane selects the right entry, including when
+      the pane is scrolled (covered by Task 2/4 tests, e.g.
+      `TestBrowserMouse_DragDivider_PressMotionRelease_ChangesWidths` and the
+      scrolled-column click tests added in Task 2 — all passing)
+- [x] dragging either divider resizes the panes and respects `minColumnWidth`
+      (verified by `TestBrowserScreen_ResizeDividerTo_*` table tests, all
+      passing)
+- [x] the dragged widths land in the config file and are picked up on the next
+      launch — verified by the closest automatable proxy: a real round-trip
+      through the INI patcher and `parseBrowserWidths`
+      (`TestConfigStore_PersistBrowserWidths_roundTripsThroughParseBrowserWidths`)
+      plus `TestBuildRootBrowser_ConfigPath_PersistsDraggedWidths`, which
+      drives a drag through the wired-up `RootModel` and asserts the file is
+      patched; a real process-restart cannot be driven headlessly in this
+      harness, so this is the substitute
+- [x] run the full suite: `go test ./...` — the only failure is the
+      pre-existing `TestGit_FileBlame_UsesIndexForStagedDiffs` (git 2.33.0
+      environmental issue, not in scope)
+- [x] `go vet ./...` clean; `golangci-lint` reported as skipped (not installed
+      on this machine)
 
 ### Task 9: [Final] Update documentation
 
