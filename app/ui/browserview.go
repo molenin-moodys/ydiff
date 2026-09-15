@@ -74,6 +74,11 @@ type BrowserViewParams struct {
 	ChangedCount   int
 	ScopeLabel     string // e.g. "uncommitted" or "branch"; empty when not yet known
 	Branch         string // empty when not yet known or not inside a repository
+
+	// Hint is a transient status-bar message (e.g. "added to favorites"). When
+	// non-empty it replaces the whole status bar, mirroring the review
+	// screen's Model.transientHint()/statusBarText() convention.
+	Hint string
 }
 
 // RenderBrowserView renders the three-column Miller-style browser screen:
@@ -548,6 +553,15 @@ func truncateRightToWidth(s string, budget int) string {
 // filter on the left, changed count, scope label and branch name on the
 // right (design mock-up: "4 changed - main").
 func (p BrowserViewParams) statusBarText() string {
+	// 2 cells for the status bar's own Padding(0, 1) on each side, 1 cell for
+	// a minimum single-space gap between the path/filter section and the
+	// changed-count/scope/branch section.
+	inner := max(p.Width-2, 0)
+
+	if p.Hint != "" {
+		return truncateLeftToWidth(sanitizeFilenameForDisplay(p.Hint), inner)
+	}
+
 	left := sanitizeFilenameForDisplay(p.Nav.Path())
 	if f := p.Nav.Filter(); f.Active() {
 		left += "   filter: " + sanitizeFilenameForDisplay(f.Query())
@@ -561,10 +575,6 @@ func (p BrowserViewParams) statusBarText() string {
 		right += " - " + sanitizeFilenameForDisplay(p.Branch)
 	}
 
-	// 2 cells for the status bar's own Padding(0, 1) on each side, 1 cell for
-	// a minimum single-space gap between the path/filter section and the
-	// changed-count/scope/branch section.
-	inner := max(p.Width-2, 0)
 	rightW := lipgloss.Width(right)
 	if rightW > inner {
 		// The right section alone doesn't fit: keep as much of it as

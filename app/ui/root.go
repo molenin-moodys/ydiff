@@ -121,6 +121,33 @@ func (r RootModel) WithBrowserWidthsPersister(p BrowserWidthsPersister) RootMode
 	return r
 }
 
+// FavoritesService is the browser's storage of favorite directories: paths
+// starred with Ctrl+F, listed and navigable with F. Consumer-side interface
+// per CLAUDE.md's convention for external/OS-backed dependencies — the
+// concrete implementation (a flat file under ~/.config/ydiff/favorites)
+// lives in app/favorites, which app/ui does not import.
+type FavoritesService interface {
+	// List returns the favorite paths, already sorted for display.
+	List() ([]string, error)
+	// Toggle adds dir if absent or removes it if present, returning which
+	// happened.
+	Toggle(dir string) (added bool, err error)
+	// Remove deletes dir from the favorites; removing an absent entry is a
+	// no-op, not an error.
+	Remove(dir string) error
+}
+
+// WithFavoritesService attaches svc as the browser screen's favorites
+// backing store and returns the updated RootModel. Mirrors
+// WithBrowserWidthsPersister: a post-construction setter so NewRootBrowser's
+// signature does not grow another parameter, and a nil svc (or never
+// calling this) makes Ctrl+F/F a silent no-op rather than a crash — a
+// missing favorites store should never block browsing.
+func (r RootModel) WithFavoritesService(svc FavoritesService) RootModel {
+	r.browser.favorites = svc
+	return r
+}
+
 // Init initializes whichever screen the root starts on. The bare-browser
 // entry point's initial directory load command is issued by browser.NewNav
 // itself and is the caller's responsibility to run alongside this one; the
@@ -362,6 +389,17 @@ type browserScreen struct {
 	// before this task.
 	persist BrowserWidthsPersister
 
+	// favorites is the browser's starred-directories store (Ctrl+F to
+	// toggle, F to browse). nil makes both keys a silent no-op, mirroring
+	// how a nil gitCache disables the changed-files pane without crashing.
+	favorites FavoritesService
+
+	// hint is a transient status-bar message (e.g. "added to favorites"),
+	// cleared at the top of the next handleKey call — mirrors the review
+	// screen's reload.hint/output.hint/compact.hint pattern of a one-render
+	// transient notice.
+	hint string
+
 	width, height int
 }
 
@@ -472,6 +510,7 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if b.overlay != nil && b.overlay.Active() {
 		return b.handleBrowserOverlayKey(msg)
 	}
+	b.hint = "" // any key on the ordinary browsing path dismisses a transient hint
 	filterActive := b.nav.Filter().Editing()
 	action := b.km.ResolveBrowser(msg.String(), filterActive)
 
@@ -548,6 +587,10 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if b.overlay != nil {
 			b.overlay.OpenHelp(b.buildBrowserHelpSpec())
 		}
+	case keymap.ActionBrowserToggleFavorite:
+		b.toggleFavorite()
+	case keymap.ActionBrowserFavorites:
+		b.openFavorites()
 	default:
 		// browser_review, browser_quit, and browser_enter's changed-file
 		// case are all intercepted by RootModel before this is reached:
@@ -564,8 +607,80 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (b browserScreen) handleBrowserOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filterActive := b.nav.Filter().Editing()
 	action := b.km.ResolveBrowser(msg.String(), filterActive)
-	b.overlay.HandleKey(msg, action)
+	out := b.overlay.HandleKey(msg, action)
+
+	switch out.Kind {
+	case overlay.OutcomeFavoriteChosen:
+		return b, b.navChanged(b.nav.GoTo(out.FavoritePath))
+	case overlay.OutcomeFavoriteDeleteRequested:
+		b.removeFavorite(out.FavoritePath)
+	}
+
 	return b, nil
+}
+
+// toggleFavorite stars or unstars the current directory in the favorites
+// store, setting a transient status-bar hint reporting which happened. A
+// nil favorites service (WithFavoritesService never called) or a
+// persistence error both leave browsing working exactly as if the feature
+// did not exist — favorites are a convenience, not something worth
+// blocking navigation over.
+func (b *browserScreen) toggleFavorite() {
+	if b.favorites == nil {
+		return
+	}
+	added, err := b.favorites.Toggle(b.nav.Path())
+	if err != nil {
+		b.hint = "favorites: " + err.Error()
+		return
+	}
+	if added {
+		b.hint = "added to favorites"
+	} else {
+		b.hint = "removed from favorites"
+	}
+}
+
+// openFavorites loads the favorites list and opens the popup over it. A nil
+// favorites service or a read error surfaces as an empty popup plus a hint
+// rather than blocking the browser screen — mirrors toggleFavorite's
+// fail-open posture.
+func (b *browserScreen) openFavorites() {
+	if b.overlay == nil {
+		return
+	}
+	if b.favorites == nil {
+		b.overlay.OpenFavorites(overlay.FavoritesSpec{})
+		return
+	}
+	items, err := b.favorites.List()
+	if err != nil {
+		b.hint = "favorites: " + err.Error()
+	}
+	b.overlay.OpenFavorites(overlay.FavoritesSpec{Items: items})
+}
+
+// removeFavorite deletes path from the favorites store and, when the popup
+// is still open (it always is — this is only called from the delete-request
+// outcome the popup itself produced), refreshes it with the new list via
+// Manager.UpdateFavorites so the deleted entry disappears immediately
+// without closing and reopening the popup.
+func (b *browserScreen) removeFavorite(path string) {
+	if b.favorites == nil {
+		return
+	}
+	if err := b.favorites.Remove(path); err != nil {
+		b.hint = "favorites: " + err.Error()
+		return
+	}
+	items, err := b.favorites.List()
+	if err != nil {
+		b.hint = "favorites: " + err.Error()
+		return
+	}
+	if b.overlay != nil {
+		b.overlay.UpdateFavorites(overlay.FavoritesSpec{Items: items})
+	}
 }
 
 // moveCursor moves whichever pane currently holds focus, so Up/Down behave
@@ -697,6 +812,7 @@ func (b browserScreen) View() string {
 		ChangedCount:   count,
 		ScopeLabel:     scopeLabel,
 		Branch:         branch,
+		Hint:           b.hint,
 	})
 	if b.overlay != nil {
 		out = b.overlay.Compose(out, overlay.RenderCtx{Width: b.width, Height: b.height, Resolver: b.resolver})

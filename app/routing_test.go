@@ -247,6 +247,39 @@ func TestBuildRootBrowser_ConfigPath_PersistsDraggedWidths(t *testing.T) {
 	require.True(t, ok)
 }
 
+// TestBuildRootBrowser_AttachesFavoritesService verifies buildRootBrowser
+// wires a real favorites.Service into the browser screen: pressing Ctrl+F
+// through the same public Update path a real keypress takes must persist
+// the current directory into ~/.config/ydiff/favorites (HOME redirected to
+// a temp dir for the test), not just flip an in-memory flag.
+func TestBuildRootBrowser_AttachesFavoritesService(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	review := newTestReviewModel(t)
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "")
+
+	entry := initCmdModel{Model: root, extra: navCmd}
+	msgs := drainCmd(entry.Init())
+	var updated tea.Model = root
+	for _, msg := range msgs {
+		updated, _ = updated.Update(msg)
+	}
+	updated, _ = updated.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	updated, _ = updated.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+
+	favPath := home + "/.config/ydiff/favorites"
+	data, err := os.ReadFile(favPath)
+	require.NoError(t, err, "buildRootBrowser must have attached a favorites.Service that wrote the favorites file")
+	assert.Contains(t, string(data), dir)
+
+	_, ok := unwrapRootModel(updated)
+	require.True(t, ok)
+}
+
 // drainCmd runs cmd and, if it produced a tea.BatchMsg, flattens each of its
 // sub-commands too, collecting every resulting message — mirroring
 // app/ui's own drainBatch test helper (root_test.go), reimplemented here

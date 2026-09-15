@@ -15,6 +15,7 @@ import (
 	"github.com/molenin-moodys/ydiff/app/annotation"
 	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/diff"
+	"github.com/molenin-moodys/ydiff/app/favorites"
 	"github.com/molenin-moodys/ydiff/app/fsutil"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/highlight"
@@ -450,7 +451,11 @@ func browserFallbackSetup() vcsSetup {
 // browser screen's BrowserWidthsPersister so a dragged divider is written
 // back into the INI config file; an empty configPath leaves the persister
 // off (dragging still resizes the panes for the current process, it just
-// is not remembered).
+// is not remembered). Also attaches a favorites.Service (Ctrl+F/F) backed
+// by ~/.config/ydiff/favorites, unconditionally — unlike configPath, that
+// path resolution failure is handled internally by the favorites package
+// itself (List/Toggle/Remove degrade gracefully), so there is no
+// composition-root-level guard to mirror.
 func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope, configPath string) (ui.RootModel, tea.Cmd) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -470,6 +475,7 @@ func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res styl
 	if configPath != "" {
 		root = root.WithBrowserWidthsPersister(&configStore{path: configPath})
 	}
+	root = root.WithFavoritesService(favorites.New(""))
 	return root, navCmd
 }
 

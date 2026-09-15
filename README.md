@@ -84,6 +84,8 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | `r` | refresh the changed-files list |
 | `.` | toggle hidden files |
 | `Tab` | move focus between the current-directory column and the changed-files pane |
+| `Ctrl+F` | star/unstar the current directory as a favorite |
+| `f` | open the favorites popup — `Enter` jumps there and closes the popup, `Delete` removes the entry under the cursor, `Esc` closes |
 | `q` | quit |
 | `?` | help |
 | mouse | click to select or enter, wheel to scroll; the scope label in the changed-files header is clickable; drag the border between two columns to resize them |
@@ -137,6 +139,17 @@ env var. If no config path could be resolved at all (only when `os.UserHomeDir()
 neither `--config` nor `YDIFF_CONFIG` is set — an explicit `--config` path is used as given,
 writable or not), dragging still resizes the columns for the rest of the session, just
 without persisting.
+
+### Favorite directories
+
+`Ctrl+F` stars or unstars the directory you're currently standing in; `f` opens a popup
+listing every starred directory, sorted alphabetically by full path — a fixed order,
+not insertion or recency order, so a favorite is always in the same place in the list.
+Inside the popup, `Enter` jumps straight there (from anywhere, not just a child or
+parent of where you are) and closes the popup; `Delete` removes the entry under the
+cursor without closing the popup, so you can prune several in a row. Favorites persist
+to `~/.config/ydiff/favorites`, a plain text file (one absolute path per line) you can
+hand-edit directly.
 
 ## The review screen
 

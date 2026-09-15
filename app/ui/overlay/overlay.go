@@ -31,26 +31,30 @@ const (
 	KindAnnotList        // annotation list popup
 	KindThemeSelect      // theme selector popup
 	KindInfo             // unified info popup (description + session + commits)
+	KindFavorites        // browser screen's favorite-directories popup
 )
 
 // OutcomeKind describes what happened after a key press in an overlay.
 type OutcomeKind int
 
 const (
-	OutcomeNone             OutcomeKind = iota // key consumed, no side effect
-	OutcomeClosed                              // overlay was closed
-	OutcomeAnnotationChosen                    // user picked an annotation (target in Outcome.AnnotationTarget)
-	OutcomeThemePreview                        // cursor moved to a new theme (name in Outcome.ThemeChoice)
-	OutcomeThemeConfirmed                      // user confirmed a theme (name in Outcome.ThemeChoice)
-	OutcomeThemeCanceled                       // user canceled theme selection
+	OutcomeNone                    OutcomeKind = iota // key consumed, no side effect
+	OutcomeClosed                                     // overlay was closed
+	OutcomeAnnotationChosen                           // user picked an annotation (target in Outcome.AnnotationTarget)
+	OutcomeThemePreview                               // cursor moved to a new theme (name in Outcome.ThemeChoice)
+	OutcomeThemeConfirmed                             // user confirmed a theme (name in Outcome.ThemeChoice)
+	OutcomeThemeCanceled                              // user canceled theme selection
+	OutcomeFavoriteChosen                             // user picked a favorite to jump to (path in Outcome.FavoritePath)
+	OutcomeFavoriteDeleteRequested                    // user asked to remove a favorite (path in Outcome.FavoritePath); overlay stays open
 )
 
 // Outcome is the return value from HandleKey. Callers switch on Kind and
-// read AnnotationTarget or ThemeChoice for the relevant outcome.
+// read AnnotationTarget, ThemeChoice, or FavoritePath for the relevant outcome.
 type Outcome struct {
 	Kind             OutcomeKind
 	AnnotationTarget *AnnotationTarget
 	ThemeChoice      *ThemeChoice
+	FavoritePath     string
 }
 
 // RenderCtx carries per-render parameters passed to Compose.
@@ -120,6 +124,13 @@ type ThemeChoice struct {
 	Name string
 }
 
+// FavoritesSpec describes the browser's favorite-directories popup content.
+// Items is already sorted by the caller (app/favorites.Service.List sorts
+// alphabetically) — the overlay does not re-sort.
+type FavoritesSpec struct {
+	Items []string
+}
+
 // InfoSpec describes the unified info popup, composed of three optional
 // sections rendered top-to-bottom: an agent-supplied prose description (#130
 // — empty hides the section), invocation/session info from --description-less
@@ -169,11 +180,12 @@ type InfoRow struct {
 // Manager coordinates overlay lifecycle: open/close, key routing, and render composition.
 // Only one overlay can be active at a time.
 type Manager struct {
-	kind     Kind
-	help     helpOverlay
-	annotLst annotListOverlay
-	themeSel themeSelectOverlay
-	info     infoOverlay
+	kind      Kind
+	help      helpOverlay
+	annotLst  annotListOverlay
+	themeSel  themeSelectOverlay
+	info      infoOverlay
+	favorites favoritesOverlay
 	// bounds is the popup rectangle on screen as of the last Compose call;
 	// used by HandleMouse to hit-test clicks and translate to popup-local coords.
 	bounds popupBounds
@@ -246,6 +258,26 @@ func (m *Manager) UpdateInfo(spec InfoSpec) {
 	m.info.spec = spec
 }
 
+// OpenFavorites activates the browser's favorite-directories popup with the
+// given spec.
+func (m *Manager) OpenFavorites(spec FavoritesSpec) {
+	m.Close()
+	m.kind = KindFavorites
+	m.favorites.open(spec)
+}
+
+// UpdateFavorites replaces the favorites popup's item list without resetting
+// scroll offset, clamping the cursor if the new list is shorter. Used after
+// a deletion persists so the popup reflects the new list without losing the
+// user's place in it (mirrors UpdateInfo). No-op when the active overlay is
+// not the favorites popup.
+func (m *Manager) UpdateFavorites(spec FavoritesSpec) {
+	if m.kind != KindFavorites {
+		return
+	}
+	m.favorites.update(spec)
+}
+
 // HandleKey routes a key press to the active overlay and returns the outcome.
 // auto-closes the overlay for outcomes that imply dismissal.
 // returns Outcome{Kind: OutcomeNone} when no overlay is active.
@@ -262,14 +294,16 @@ func (m *Manager) HandleKey(msg tea.KeyMsg, action keymap.Action) Outcome {
 		out = m.themeSel.handleKey(msg, action)
 	case KindInfo:
 		out = m.info.handleKey(msg, action)
+	case KindFavorites:
+		out = m.favorites.handleKey(msg, action)
 	default:
 		return Outcome{}
 	}
 
 	switch out.Kind {
-	case OutcomeClosed, OutcomeAnnotationChosen, OutcomeThemeConfirmed, OutcomeThemeCanceled:
+	case OutcomeClosed, OutcomeAnnotationChosen, OutcomeThemeConfirmed, OutcomeThemeCanceled, OutcomeFavoriteChosen:
 		m.Close()
-	case OutcomeNone, OutcomeThemePreview: // no state change
+	case OutcomeNone, OutcomeThemePreview, OutcomeFavoriteDeleteRequested: // no state change / caller updates in place
 	}
 
 	return out
@@ -308,14 +342,16 @@ func (m *Manager) HandleMouse(msg tea.MouseMsg) Outcome {
 		out = m.themeSel.handleMouse(msg)
 	case KindInfo:
 		out = m.info.handleMouse(msg)
+	case KindFavorites:
+		out = m.favorites.handleMouse(msg)
 	default: // KindNone handled by the early return above
 		return Outcome{}
 	}
 
 	switch out.Kind {
-	case OutcomeClosed, OutcomeAnnotationChosen, OutcomeThemeConfirmed, OutcomeThemeCanceled:
+	case OutcomeClosed, OutcomeAnnotationChosen, OutcomeThemeConfirmed, OutcomeThemeCanceled, OutcomeFavoriteChosen:
 		m.Close()
-	case OutcomeNone, OutcomeThemePreview: // no state change
+	case OutcomeNone, OutcomeThemePreview, OutcomeFavoriteDeleteRequested: // no state change / caller updates in place
 	}
 
 	return out
@@ -336,6 +372,8 @@ func (m *Manager) Compose(base string, ctx RenderCtx) string {
 		fg = m.themeSel.render(ctx, m)
 	case KindInfo:
 		fg = m.info.render(ctx, m)
+	case KindFavorites:
+		fg = m.favorites.render(ctx, m)
 	}
 	return m.overlayCenter(base, fg, ctx.Width)
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -393,4 +394,200 @@ func TestRootModel_BrowserToggleHidden_RevealsDotfiles(t *testing.T) {
 		}
 	}
 	assert.NotContains(t, names(), ".hidden", "toggling hidden again must hide dotfiles once more")
+}
+
+// fakeFavoritesService is a minimal in-memory FavoritesService for tests
+// that don't need real file persistence — just observable Toggle/List/Remove
+// behavior. listErr, toggleErr and removeErr let a test force each method's
+// error path.
+type fakeFavoritesService struct {
+	items     []string
+	listErr   error
+	toggleErr error
+	removeErr error
+}
+
+func (f *fakeFavoritesService) List() ([]string, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	out := make([]string, len(f.items))
+	copy(out, f.items)
+	return out, nil
+}
+
+func (f *fakeFavoritesService) Toggle(dir string) (bool, error) {
+	if f.toggleErr != nil {
+		return false, f.toggleErr
+	}
+	for i, item := range f.items {
+		if item == dir {
+			f.items = append(f.items[:i], f.items[i+1:]...)
+			return false, nil
+		}
+	}
+	f.items = append(f.items, dir)
+	return true, nil
+}
+
+func (f *fakeFavoritesService) Remove(dir string) error {
+	if f.removeErr != nil {
+		return f.removeErr
+	}
+	for i, item := range f.items {
+		if item == dir {
+			f.items = append(f.items[:i], f.items[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func TestRootModel_Browser_CtrlFTogglesFavoriteAndSetsHint(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	root = updated.(RootModel)
+
+	assert.Equal(t, []string{dir}, svc.items, "Ctrl+F must add the current directory")
+	assert.Equal(t, "added to favorites", root.browser.hint)
+}
+
+func TestRootModel_Browser_CtrlFTwiceRemoves(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	root = updated.(RootModel)
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	root = updated.(RootModel)
+
+	assert.Empty(t, svc.items, "second Ctrl+F must remove it again")
+	assert.Equal(t, "removed from favorites", root.browser.hint)
+}
+
+func TestRootModel_Browser_CtrlFNilServiceIsNoOp(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+
+	var updated tea.Model
+	assert.NotPanics(t, func() {
+		updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	})
+	root = updated.(RootModel)
+	assert.Empty(t, root.browser.hint)
+}
+
+func TestRootModel_Browser_FOpensFavoritesOverlay(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{items: []string{"/repo/one", "/repo/two"}}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	root = updated.(RootModel)
+	updated, _ = root.Update(keyMsg('f'))
+	root = updated.(RootModel)
+
+	require.True(t, root.browser.overlay.Active())
+	view := root.browser.View()
+	assert.Contains(t, view, "/repo/one")
+	assert.Contains(t, view, "/repo/two")
+}
+
+func TestRootModel_Browser_FavoritesEnterNavigatesAndCloses(t *testing.T) {
+	dir := t.TempDir()
+	target := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{items: []string{target}}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	updated, _ := root.Update(keyMsg('f'))
+	root = updated.(RootModel)
+	require.True(t, root.browser.overlay.Active())
+
+	updated, cmd := root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+	for _, msg := range drainBatch(cmd) {
+		if lm, ok := msg.(browser.LoadedMsg); ok {
+			root.browser.nav.Apply(lm)
+		}
+	}
+
+	assert.False(t, root.browser.overlay.Active(), "Enter on a favorite must close the popup")
+	assert.Equal(t, target, root.browser.nav.Path())
+}
+
+func TestRootModel_Browser_FavoritesDeleteRemovesAndKeepsOpen(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{items: []string{"/repo/one", "/repo/two"}}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	updated, _ := root.Update(keyMsg('f'))
+	root = updated.(RootModel)
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	root = updated.(RootModel)
+
+	assert.True(t, root.browser.overlay.Active(), "deleting a favorite must not close the popup")
+	assert.Equal(t, []string{"/repo/two"}, svc.items)
+	view := root.browser.View()
+	assert.NotContains(t, view, "/repo/one")
+	assert.Contains(t, view, "/repo/two")
+}
+
+func TestRootModel_Browser_FavoritesNilServiceOpensEmptyPopup(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+
+	var updated tea.Model
+	assert.NotPanics(t, func() {
+		updated, _ = root.Update(keyMsg('f'))
+	})
+	root = updated.(RootModel)
+	require.True(t, root.browser.overlay.Active(), "F must still open the popup, empty, with a nil service")
+}
+
+func TestRootModel_Browser_FavoritesListErrorSetsHintNotPanic(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+	svc := &fakeFavoritesService{listErr: errors.New("boom")}
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver()).
+		WithFavoritesService(svc)
+
+	var updated tea.Model
+	assert.NotPanics(t, func() {
+		updated, _ = root.Update(keyMsg('f'))
+	})
+	root = updated.(RootModel)
+	assert.Contains(t, root.browser.hint, "boom")
 }
