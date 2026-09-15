@@ -226,21 +226,25 @@ default theme `revdiff` -> `ydiff`.
 - Create: `LICENSE-revdiff`, `README.md`, `UPSTREAM.md`
 - Modify: `LICENSE` (merge conflict), repository history
 
-- [ ] add the upstream remote and fetch **the tag, not the branch**:
+- [x] add the upstream remote and fetch **the tag, not the branch**:
       `git remote add upstream https://github.com/umputun/revdiff` then
       `git fetch upstream tag v1.11.1 --no-tags` — fetching `master` would silently fork
       from a different commit than `UPSTREAM.md` records, and would drag in upstream's `v*`
       tags, which the release workflow triggers on
-- [ ] merge `v1.11.1` into `main` with `--allow-unrelated-histories`; **expect a conflict on
+- [x] merge `v1.11.1` into `main` with `--allow-unrelated-histories`; **expect a conflict on
       `LICENSE`**, since both repositories have one — resolve in favour of this repository's
       MIT © Misha Olenin
-- [ ] create `LICENSE-revdiff` with Umputun's MIT notice verbatim
-- [ ] create `UPSTREAM.md` recording tag `v1.11.1`, SHA
+- [x] create `LICENSE-revdiff` with Umputun's MIT notice verbatim
+- [x] create `UPSTREAM.md` recording tag `v1.11.1`, SHA
       `39da604a135865eef40714bf86e20f01c15be833`, and the procedure for pulling a future
       upstream fix
-- [ ] write `README.md` stating ydiff is a fork of revdiff, and that the browser's
+- [x] write `README.md` stating ydiff is a fork of revdiff, and that the browser's
       interaction model is inspired by yazi (MIT) with no yazi code used
-- [ ] run `go build ./app` and `go test ./...` — inherited suite green before task 2
+- [x] run `go build ./app` and `go test ./...` — inherited suite green before task 2
+      (note: `TestGit_FileBlame_UsesIndexForStagedDiffs` in `app/diff/blame_test.go` fails
+      unmodified from the merge, due to `git blame --contents` output differing on this
+      machine's git 2.33.0 vs. whatever version upstream's CI uses — an environment issue
+      unrelated to the fork surgery; see [deviation] note logged separately)
 
 ### Task 2: Rename module path and binary
 
