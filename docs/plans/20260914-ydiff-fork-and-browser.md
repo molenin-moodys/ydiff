@@ -554,18 +554,18 @@ not depend on flag parsing existing yet.*
 **Files:**
 - Create: `app/ui/changedpane.go`, `app/ui/changedpane_test.go`, `app/ui/gitload.go`
 
-- [ ] write tests first: status badges `M`, `A`, `D`, `R`, `??` render themed; the pane is
+- [x] write tests first: status badges `M`, `A`, `D`, `R`, `??` render themed; the pane is
       repository-wide and does not narrow to the current directory
-- [ ] write the message tests: outside a repository, and base-not-found in branch scope, each
+- [x] write the message tests: outside a repository, and base-not-found in branch scope, each
       render their own plain message instead of an empty or stale list
-- [ ] implement the **Bubble Tea command and message plumbing for `gitstate` loads**, with
+- [x] implement the **Bubble Tea command and message plumbing for `gitstate` loads**, with
       stale-response discard mirroring task 13
-- [ ] implement the pane with its own cursor and scrolling, `Tab` focus switching, and
+- [x] implement the pane with its own cursor and scrolling, `Tab` focus switching, and
       `Enter` on a changed file entering review scoped to that path — `Enter` on an unchanged
       file is a no-op
-- [ ] implement repository re-resolution when navigation moves into a different repository,
+- [x] implement repository re-resolution when navigation moves into a different repository,
       and cache invalidation on `t` and `r`
-- [ ] run `go test -race ./app/ui/...` — must pass before task 21
+- [x] run `go test -race ./app/ui/...` — must pass before task 21
 
 ### Task 21: Mouse support in the browser
 

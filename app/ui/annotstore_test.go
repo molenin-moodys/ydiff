@@ -12,6 +12,7 @@ import (
 	"github.com/molenin-moodys/ydiff/app/diff"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // Task 18 guards a very specific failure mode: RootModel re-creating the
@@ -50,7 +51,7 @@ func TestRootModel_Store_ReturnsInjectedInstance(t *testing.T) {
 		nav := newTestNav(t, dir)
 		review := testModel(nil, nil)
 
-		root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+		root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 		assert.Same(t, review.Store(), root.Store())
 	})
 
@@ -80,7 +81,7 @@ func TestRootModel_AnnotationStore_SurvivesBrowserReviewRoundTrips(t *testing.T)
 	review.file.lines = linesA
 	review.nav.diffCursor = 0
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 	storeAtConstruction := root.Store()
 
 	// push into review (d) and annotate the first file
@@ -164,7 +165,7 @@ func TestRootModel_AnnotationStore_ExitCodeOnAnnotations_BrowserPath(t *testing.
 	review.file.lines = lines
 	review.nav.diffCursor = 0
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 
 	// no annotations yet: browser -> review -> back to browser without annotating
 	updated, _ := root.Update(keyMsg('d'))

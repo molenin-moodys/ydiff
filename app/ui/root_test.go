@@ -13,6 +13,7 @@ import (
 	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // keyMsg builds a tea.KeyMsg for a single-rune key, matching the pattern
@@ -82,7 +83,7 @@ func TestRootModel_BrowserReview_DPushesReviewScreen(t *testing.T) {
 	nav := newTestNav(t, dir)
 	review := testModel(nil, nil)
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 	require.Equal(t, ScreenBrowser, root.screen)
 
 	updated, _ := root.Update(keyMsg('d'))
@@ -96,7 +97,7 @@ func TestRootModel_BrowserReview_QInReviewPopsToBrowser(t *testing.T) {
 	nav := newTestNav(t, dir)
 	review := testModel(nil, nil)
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 
 	updated, _ := root.Update(keyMsg('d'))
 	root = updated.(RootModel)
@@ -114,7 +115,7 @@ func TestRootModel_Browser_QQuits(t *testing.T) {
 	nav := newTestNav(t, dir)
 	review := testModel(nil, nil)
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 
 	_, cmd := root.Update(keyMsg('q'))
 
@@ -149,7 +150,7 @@ func TestRootModel_WindowResize_ReachesBothScreens(t *testing.T) {
 	nav := newTestNav(t, dir)
 	review := testModel(nil, nil)
 
-	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
 
 	updated, _ := root.Update(keyMsg('d'))
 	root = updated.(RootModel)
@@ -179,7 +180,7 @@ func TestRootModel_ReturnFromReview_InvalidatesGitCache(t *testing.T) {
 		return nil, nil
 	})
 
-	root := NewRootBrowser(nav, keymap.Default(), review, cache, gitstate.ScopeUncommitted)
+	root := NewRootBrowser(nav, keymap.Default(), review, cache, gitstate.ScopeUncommitted, style.PlainResolver())
 
 	repo, err := gitstate.Resolve(dir)
 	require.NoError(t, err)
@@ -202,4 +203,118 @@ func TestRootModel_ReturnFromReview_InvalidatesGitCache(t *testing.T) {
 	_, err = cache.Get(repo.Root, gitstate.ScopeUncommitted)
 	require.NoError(t, err)
 	assert.Equal(t, 2, loadCalls, "return from review must invalidate the cache, forcing a recompute")
+}
+
+// TestRootModel_View_RendersRealBrowserView is task 20's carry-over
+// acceptance criterion from task 19: the browser screen must render
+// RenderBrowserView's real three-column layout, not the placeholder string
+// browserScreen.View used to return.
+func TestRootModel_View_RendersRealBrowserView(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+	root.Init() // marks the changed-files pane as loading; nil gitCache means no cmd actually runs
+	updated, _ := root.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	root = updated.(RootModel)
+
+	view := root.View()
+	assert.NotEqual(t, "ydiff — "+dir, view, "must not be the task-19 placeholder")
+	assert.Contains(t, view, "changed", "the changed-files pane's header must be present")
+	// a nil gitCache means LoadGitState never actually loads (see
+	// changedPane.Request), so the pane stays in its loading state forever
+	// here rather than ever resolving to "not a git repository" — it is
+	// still a real, non-empty rendering rather than the old placeholder.
+	assert.Contains(t, view, changedPaneMsgLoading)
+}
+
+// TestRootModel_TabTogglesFocus verifies Tab (browser_focus_pane) switches
+// focus between the middle column and the changed-files pane, and back.
+func TestRootModel_TabTogglesFocus(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+	require.Equal(t, BrowserFocusCurrent, root.browser.focus)
+
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyTab})
+	root = updated.(RootModel)
+	assert.Equal(t, BrowserFocusChanged, root.browser.focus)
+
+	updated, _ = root.Update(tea.KeyMsg{Type: tea.KeyTab})
+	root = updated.(RootModel)
+	assert.Equal(t, BrowserFocusCurrent, root.browser.focus)
+}
+
+// TestRootModel_EnterOnChangedFileInMiddleColumn_OpensScopedReview and its
+// sibling below exercise the design's symmetry requirement: Enter behaves
+// the same whether the cursor is on a changed file in the middle column or
+// in the changed-files pane itself, and does nothing for an unchanged file.
+func TestRootModel_EnterOnChangedFileInMiddleColumn_OpensScopedReview(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "changed.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "unchanged.txt"), []byte("y"), 0o600))
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+	root.browser.changed.Request(dir)
+	root.browser.changed.Apply(GitLoadedMsg{
+		Dir: dir, Scope: gitstate.ScopeUncommitted, Root: dir,
+		Files: []gitstate.ChangedFile{{Path: "changed.txt", Status: gitstate.StatusModified}},
+	})
+
+	nav.SetCursor(0) // "changed.txt" sorts before "unchanged.txt"
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+
+	require.Equal(t, ScreenReview, root.screen, "Enter on a changed file must open review")
+	assert.Equal(t, []string{"changed.txt"}, root.review.cfg.only)
+}
+
+func TestRootModel_EnterOnUnchangedFileInMiddleColumn_NoOp(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "changed.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "unchanged.txt"), []byte("y"), 0o600))
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+	root.browser.changed.Request(dir)
+	root.browser.changed.Apply(GitLoadedMsg{
+		Dir: dir, Scope: gitstate.ScopeUncommitted, Root: dir,
+		Files: []gitstate.ChangedFile{{Path: "changed.txt", Status: gitstate.StatusModified}},
+	})
+
+	nav.SetCursor(1) // "unchanged.txt"
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+
+	assert.Equal(t, ScreenBrowser, root.screen, "Enter on an unchanged file must be a no-op")
+}
+
+func TestRootModel_EnterInChangedPane_OpensScopedReview(t *testing.T) {
+	dir := t.TempDir()
+	nav := newTestNav(t, dir)
+	review := testModel(nil, nil)
+
+	root := NewRootBrowser(nav, keymap.Default(), review, nil, gitstate.ScopeUncommitted, style.PlainResolver())
+	root.browser.changed.Request(dir)
+	root.browser.changed.Apply(GitLoadedMsg{
+		Dir: dir, Scope: gitstate.ScopeUncommitted, Root: dir,
+		Files: []gitstate.ChangedFile{
+			{Path: "a.txt", Status: gitstate.StatusModified},
+			{Path: "b.txt", Status: gitstate.StatusAdded},
+		},
+	})
+	root.browser.focus = BrowserFocusChanged
+	root.browser.changed.MoveCursor(1) // select "b.txt"
+
+	updated, _ := root.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	root = updated.(RootModel)
+
+	require.Equal(t, ScreenReview, root.screen)
+	assert.Equal(t, []string{"b.txt"}, root.review.cfg.only)
 }

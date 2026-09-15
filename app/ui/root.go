@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"path/filepath"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/molenin-moodys/ydiff/app/annotation"
 	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
 // Screen identifies which of the two top-level screens is currently active.
@@ -69,31 +72,41 @@ func NewRootReview(review Model) RootModel {
 // (`q`) it. This is the entry point used when ydiff is launched bare.
 //
 // gitCache and scope are consulted to invalidate the changed-files cache
-// when returning from the review screen; gitCache may be nil to disable
-// invalidation. A nil km falls back to keymap.Default().
-func NewRootBrowser(nav *browser.Nav, km *keymap.Keymap, review Model, gitCache *gitstate.Cache, scope gitstate.Scope) RootModel {
+// when returning from the review screen, and to load the changed-files pane
+// (task 20); gitCache may be nil to disable both — the pane then renders
+// its own "not a git repository"-style state without ever shelling out.
+// resolver themes the browser screen's three columns and changed-files
+// pane. A nil km falls back to keymap.Default().
+func NewRootBrowser(
+	nav *browser.Nav, km *keymap.Keymap, review Model, gitCache *gitstate.Cache, scope gitstate.Scope, resolver style.Resolver,
+) RootModel {
 	if km == nil {
 		km = keymap.Default()
 	}
 	return RootModel{
 		screen:     ScreenBrowser,
 		hasBrowser: true,
-		browser:    browserScreen{nav: nav, km: km},
-		review:     review,
-		gitCache:   gitCache,
-		scope:      scope,
+		browser: browserScreen{
+			nav:      nav,
+			km:       km,
+			resolver: resolver,
+			changed:  newChangedPane(gitCache, scope),
+		},
+		review:   review,
+		gitCache: gitCache,
+		scope:    scope,
 	}
 }
 
 // Init initializes whichever screen the root starts on. The bare-browser
 // entry point's initial directory load command is issued by browser.NewNav
-// itself and is the caller's responsibility to run alongside this one
-// (there is nothing further for the browser screen to init here).
+// itself and is the caller's responsibility to run alongside this one; the
+// changed-files pane's own initial load is issued by browserScreen.Init.
 func (r RootModel) Init() tea.Cmd {
 	if r.screen == ScreenReview {
 		return r.review.Init()
 	}
-	return nil
+	return r.browser.Init()
 }
 
 // Update routes msg to the active screen, with one exception: a
@@ -145,13 +158,14 @@ func (r RootModel) updateBrowser(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case keymap.ActionBrowserQuit:
 			return r, tea.Quit
 		case keymap.ActionBrowserReview:
-			r.screen = ScreenReview
-			var cmd tea.Cmd
-			if !r.reviewInited {
-				cmd = r.review.Init()
-				r.reviewInited = true
+			return r.enterReview(nil)
+		case keymap.ActionBrowserEnter:
+			if path, ok := r.browser.ReviewTarget(); ok {
+				return r.enterReview([]string{path})
 			}
-			return r, cmd
+			// not a changed-file target (a directory, the filter box, or no
+			// changed-files match): fall through to the browser screen's own
+			// handling below, which drives ordinary navigation instead.
 		default:
 			// fall through to the browser screen's own handling below
 		}
@@ -160,6 +174,23 @@ func (r RootModel) updateBrowser(msg tea.Msg) (tea.Model, tea.Cmd) {
 	bm, cmd := r.browser.Update(msg)
 	r.browser = bm.(browserScreen) //nolint:errcheck // browserScreen.Update always returns a browserScreen
 	return r, cmd
+}
+
+// enterReview pushes the review screen scoped to only (nil to review
+// everything, as `d` always does). Review is initialized the first time
+// this runs; on every later call — a repeated `d`, or a changed-file Enter
+// after review has already been opened once — it instead re-triggers a
+// reload so the review screen picks up the new scope. triggerReload (unlike
+// applyReloadCleanup) never clears the annotation store, so annotations
+// made in an earlier visit survive this re-scoping (task 18's invariant).
+func (r RootModel) enterReview(only []string) (tea.Model, tea.Cmd) {
+	r.review.cfg.only = only
+	r.screen = ScreenReview
+	if !r.reviewInited {
+		r.reviewInited = true
+		return r, r.review.Init()
+	}
+	return r, r.review.triggerReload()
 }
 
 // updateReview handles messages while ScreenReview is active. A key that
@@ -188,6 +219,13 @@ func (r RootModel) updateReview(msg tea.Msg) (tea.Model, tea.Cmd) {
 // it. Called on every return from the review screen: a file may have just
 // been edited there. A no-op when no cache was supplied, or when the
 // browser's current directory is not inside a git repository.
+//
+// The scope invalidated is the changed-files pane's own current scope
+// (b.browser.changed.scope), not r.scope: r.scope only records the scope
+// NewRootBrowser was constructed with, and the pane's scope moves
+// independently of it once the user presses `t` (browserScreen.handleKey's
+// ActionBrowserToggleScope case) — reading r.scope here instead would
+// invalidate the wrong cache entry after a scope toggle.
 func (r *RootModel) invalidateGitCache() {
 	if r.gitCache == nil || r.browser.nav == nil {
 		return
@@ -196,7 +234,11 @@ func (r *RootModel) invalidateGitCache() {
 	if err != nil {
 		return
 	}
-	r.gitCache.Invalidate(repo.Root, r.scope)
+	scope := r.scope
+	if r.browser.changed != nil {
+		scope = r.browser.changed.scope
+	}
+	r.gitCache.Invalidate(repo.Root, scope)
 }
 
 // Store returns the annotation store owned by the review screen. Both entry
@@ -236,28 +278,36 @@ func (m Model) isQuitKey(msg tea.KeyMsg) bool {
 	return m.keymap.Resolve(msg.String()) == keymap.ActionQuit
 }
 
-// browserScreen is the routing-level wrapper around browser.Nav: the piece
-// of the browser package's navigation state that satisfies tea.Model so
-// RootModel can delegate Update/View to it. Rendering here is a minimal
-// placeholder; RenderBrowserView (browserview.go, task 19) renders the real
-// three-column view and is wired in here once the changed-files pane (task
-// 20) has real content and focus-switching to hand it.
+// browserScreen is the routing-level wrapper around browser.Nav and the
+// changed-files pane: the piece of state that satisfies tea.Model so
+// RootModel can delegate Update/View to it, rendered via RenderBrowserView
+// (browserview.go, task 19).
 type browserScreen struct {
 	nav *browser.Nav
 	km  *keymap.Keymap
 
+	changed  *changedPane
+	focus    BrowserFocus
+	resolver style.Resolver
+
 	width, height int
 }
 
-// Init satisfies tea.Model. The browser's initial directory-load command
-// comes from browser.NewNav itself, run by the caller alongside RootModel's
-// own Init; there is nothing further to init here.
-func (b browserScreen) Init() tea.Cmd { return nil }
+// Init issues the changed-files pane's initial load for the browser's
+// starting directory. The filesystem column's own initial load comes from
+// browser.NewNav itself, run by the caller alongside RootModel's own Init.
+func (b browserScreen) Init() tea.Cmd {
+	if b.changed == nil {
+		return nil
+	}
+	return b.changed.Request(b.nav.Path())
+}
 
 // Update handles messages for the browser screen: window resizes update the
 // stored dimensions, browser.LoadedMsg results are applied to the
-// navigation state, and keys are resolved through the browser keymap
-// namespace and dispatched to the corresponding Nav method.
+// navigation state, GitLoadedMsg results are applied to the changed-files
+// pane (discarded by changedPane.Apply if stale), and keys are resolved
+// through the browser keymap namespace and dispatched accordingly.
 func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -265,6 +315,11 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return b, nil
 	case browser.LoadedMsg:
 		b.nav.Apply(msg)
+		return b, nil
+	case GitLoadedMsg:
+		if b.changed != nil {
+			b.changed.Apply(msg)
+		}
 		return b, nil
 	case tea.KeyMsg:
 		return b.handleKey(msg)
@@ -274,38 +329,171 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKey dispatches one browser-namespace action per key. Screen
-// transitions (browser_review, browser_quit) are intercepted by RootModel
-// before this is reached; actions belonging to panes not yet wired (scope
-// toggle, refresh, hidden-file toggle, pane focus, help) are left for the
-// tasks that implement those panes.
+// transitions (browser_review, browser_quit) and browser_enter's
+// "open review scoped to this changed file" case are intercepted by
+// RootModel (via ReviewTarget) before this is reached — browser_enter here
+// only ever means "enter this directory" or "apply the filter", the cases
+// ReviewTarget declined.
 func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filterActive := b.nav.Filter().Editing()
 	switch b.km.ResolveBrowser(msg.String(), filterActive) {
 	case keymap.ActionBrowserUp:
-		b.nav.MoveCursor(-1)
+		b.moveCursor(-1)
 	case keymap.ActionBrowserDown:
-		b.nav.MoveCursor(1)
+		b.moveCursor(1)
 	case keymap.ActionBrowserEnter:
 		if b.nav.Filter().Editing() {
 			b.nav.FilterApply()
 			return b, nil
 		}
-		return b, b.nav.Enter()
+		if b.focus == BrowserFocusChanged {
+			return b, nil // no changed-file match under the cursor: no-op
+		}
+		return b, b.navChanged(b.nav.Enter())
 	case keymap.ActionBrowserUpLevel:
-		return b, b.nav.Up()
+		return b, b.navChanged(b.nav.Up())
 	case keymap.ActionBrowserFilter:
 		b.nav.FilterStart()
 	case keymap.ActionBrowserDismiss:
 		b.nav.FilterCancel()
+	case keymap.ActionBrowserToggleScope:
+		if b.changed != nil {
+			return b, b.changed.ToggleScope(b.nav.Path())
+		}
+	case keymap.ActionBrowserRefresh:
+		if b.changed != nil {
+			return b, b.changed.Refresh(b.nav.Path())
+		}
+	case keymap.ActionBrowserFocusPane:
+		if b.focus == BrowserFocusCurrent {
+			b.focus = BrowserFocusChanged
+		} else {
+			b.focus = BrowserFocusCurrent
+		}
 	default:
-		// browser_review, browser_quit (intercepted by RootModel), and every
-		// action for a pane not yet wired: no-op here.
+		// browser_review, browser_quit, browser_enter's changed-file case
+		// (all intercepted by RootModel), and hidden-file toggle / help (no
+		// pane implements them yet): no-op here.
 	}
 	return b, nil
 }
 
-// View renders the browser screen. Placeholder until the three-column view
-// (task 19) and changed-files pane (task 20) are wired in.
+// moveCursor moves whichever pane currently holds focus, so Up/Down behave
+// identically in the middle column and the changed-files pane.
+func (b browserScreen) moveCursor(delta int) {
+	if b.focus == BrowserFocusChanged {
+		if b.changed != nil {
+			b.changed.MoveCursor(delta)
+		}
+		return
+	}
+	b.nav.MoveCursor(delta)
+}
+
+// navChanged batches navCmd (a browser.Nav navigation command, or nil for a
+// no-op move) alongside a changed-files reload for the navigation's
+// destination directory. Enter and Up update nav's path synchronously
+// before returning their (asynchronous, listing-only) load command — see
+// Nav.Enter's and Nav.Up's doc comments — so b.nav.Path() already names the
+// destination directory here, even though navCmd has not run yet. Batching
+// a reload alongside every successful navigation this way is what makes
+// repository re-resolution on navigation work, rather than only reloading
+// on scope toggle/refresh.
+func (b browserScreen) navChanged(navCmd tea.Cmd) tea.Cmd {
+	if navCmd == nil || b.changed == nil {
+		return navCmd
+	}
+	return tea.Batch(navCmd, b.changed.Request(b.nav.Path()))
+}
+
+// ReviewTarget reports the path Enter should open in review, and whether
+// there is one, implementing the design's symmetry rule: Enter on a changed
+// file opens review scoped to it, in the changed-files pane or in the
+// middle column alike, and does nothing if the file is unchanged.
+// RootModel.updateBrowser consults this before ordinary browser_enter
+// handling runs, so a directory entry (declined here) still falls through
+// to nav.Enter's ordinary "navigate into it" behavior.
+func (b browserScreen) ReviewTarget() (path string, ok bool) {
+	if b.changed == nil {
+		return "", false
+	}
+	if b.focus == BrowserFocusChanged {
+		return b.changed.Selected()
+	}
+	if b.nav.Filter().Editing() {
+		return "", false
+	}
+	entries := b.nav.VisibleEntries()
+	cursor := b.nav.Cursor()
+	if cursor < 0 || cursor >= len(entries) {
+		return "", false
+	}
+	entry := entries[cursor].Entry
+	if entry.Enterable() {
+		return "", false // directory: ordinary navigation instead
+	}
+	if b.changed.root == "" {
+		return "", false // not currently inside a resolved repository
+	}
+	abs := filepath.Join(b.nav.Path(), entry.Name)
+	rel, err := filepath.Rel(b.changed.root, abs)
+	if err != nil {
+		return "", false
+	}
+	return b.changed.MatchPath(filepath.ToSlash(rel))
+}
+
+// changedWidth returns the column width the changed-files pane will be
+// rendered at, mirroring RenderBrowserView's own narrow-terminal tiering and
+// distributeWidths math exactly (browserview.go) so the pre-rendered
+// content b.changed.Render produces always matches the box it is placed
+// into. widths are the parent/current/changed proportions RenderBrowserView
+// is about to be called with.
+func changedWidth(totalWidth int, widths [3]int) int {
+	switch {
+	case totalWidth >= wideTierWidth:
+		available := max(totalWidth-6, 0)
+		return distributeWidths(available, []int{widths[0], widths[1], widths[2]})[2]
+	case totalWidth >= mediumTierWidth:
+		available := max(totalWidth-4, 0)
+		return distributeWidths(available, []int{widths[1], widths[2]})[1]
+	default:
+		return max(totalWidth-2, 0)
+	}
+}
+
+// defaultBrowserWidths are the parent/current/changed column proportions
+// used until the --browser-widths flag (a later task) supplies a real one.
+var defaultBrowserWidths = [3]int{15, 35, 50}
+
+// View renders the browser screen: the three-column Miller view plus status
+// bar (RenderBrowserView, task 19), with the changed-files pane's content
+// pre-rendered at the exact width that view will place it into.
 func (b browserScreen) View() string {
-	return "ydiff — " + b.nav.Path()
+	ph := max(b.height-3, 1)   // status bar row + column box borders, see RenderBrowserView
+	bodyHeight := max(ph-1, 0) // minus the changed pane's own header line, mirroring renderChangedColumn
+
+	var content string
+	var count int
+	var scopeLabel, branch string
+	if b.changed != nil {
+		cw := changedWidth(b.width, defaultBrowserWidths)
+		content = b.changed.Render(b.resolver, cw, bodyHeight, b.focus == BrowserFocusChanged)
+		count = b.changed.count()
+		scopeLabel = string(b.changed.scope)
+		branch = b.changed.branch
+	}
+
+	return RenderBrowserView(BrowserViewParams{
+		Nav:            b.nav,
+		Widths:         defaultBrowserWidths,
+		Width:          b.width,
+		Height:         b.height,
+		Resolver:       b.resolver,
+		Focus:          b.focus,
+		ChangedContent: content,
+		ChangedCount:   count,
+		ScopeLabel:     scopeLabel,
+		Branch:         branch,
+	})
 }
