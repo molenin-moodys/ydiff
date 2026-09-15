@@ -324,3 +324,75 @@ func TestBrowserMouse_MotionWithoutDrag_IsNoOp(t *testing.T) {
 	assert.False(t, root.browser.drag.active)
 	assert.Equal(t, before, root.browser.effectiveWidths(), "motion with no drag in progress must not change widths")
 }
+
+// fakeWidthsPersister is a test double for BrowserWidthsPersister that
+// records every call it receives.
+type fakeWidthsPersister struct {
+	calls [][3]int
+	err   error
+}
+
+func (f *fakeWidthsPersister) PersistBrowserWidths(widths [3]int) error {
+	f.calls = append(f.calls, widths)
+	return f.err
+}
+
+// TestBrowserMouse_DragRelease_PersistsWidths verifies a full press → motion
+// → release sequence, with a persister attached via
+// WithBrowserWidthsPersister, saves the dragged-to widths exactly once, on
+// release.
+func TestBrowserMouse_DragRelease_PersistsWidths(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+	persister := &fakeWidthsPersister{}
+	root = root.WithBrowserWidthsPersister(persister)
+
+	ph := root.browser.paneContentHeight()
+	before := root.browser.effectiveWidths()
+	available := max(root.browser.width-6, 0)
+	cells := distributeWidths(available, []int{before[0], before[1], before[2]})
+	div0X := cells[0] + 1
+
+	updated, _ := root.Update(leftClick(div0X, ph/2+1))
+	root = updated.(RootModel)
+	assert.Empty(t, persister.calls, "starting a drag must not persist yet")
+
+	updated, _ = root.Update(mouseMotion(div0X+5, ph/2+1))
+	root = updated.(RootModel)
+	assert.Empty(t, persister.calls, "motion while dragging must not persist yet")
+
+	updated, cmd := root.Update(mouseRelease(div0X+5, ph/2+1))
+	root = updated.(RootModel)
+	require.NotNil(t, cmd, "release with a persister and a real width change issues a persist command")
+	cmd() // run the command synchronously; it swallows its own error via [WARN]
+
+	require.Len(t, persister.calls, 1, "persister should be called exactly once, on release")
+	assert.Equal(t, root.browser.effectiveWidths(), persister.calls[0], "persisted widths match the dragged-to widths")
+}
+
+// TestBrowserMouse_ReleaseWithoutDrag_DoesNotPersist verifies a release
+// event with no drag in progress never reaches the persister, matching the
+// existing "release with no drag in progress is a no-op" behavior.
+func TestBrowserMouse_ReleaseWithoutDrag_DoesNotPersist(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	root := wideBrowserRoot(t, dir)
+	persister := &fakeWidthsPersister{}
+	root = root.WithBrowserWidthsPersister(persister)
+
+	ph := root.browser.paneContentHeight()
+	updated, cmd := root.Update(mouseRelease(root.browser.width/2, ph/2+1))
+	root = updated.(RootModel)
+
+	assert.Nil(t, cmd)
+	assert.Empty(t, persister.calls)
+}
+
+// TestBrowserScreen_PersistWidthsCmd_NilPersisterIsSafe verifies a nil
+// persister (the default when WithBrowserWidthsPersister is never called)
+// produces a nil command rather than panicking.
+func TestBrowserScreen_PersistWidthsCmd_NilPersisterIsSafe(t *testing.T) {
+	b := browserScreen{width: 120, height: 40, widths: [3]int{15, 35, 50}}
+	assert.Nil(t, b.persistWidthsCmd())
+}

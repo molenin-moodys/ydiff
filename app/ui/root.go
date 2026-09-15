@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"log"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +107,18 @@ func NewRootBrowser(
 		gitCache: gitCache,
 		scope:    scope,
 	}
+}
+
+// WithBrowserWidthsPersister attaches p as the browser screen's
+// BrowserWidthsPersister and returns the updated RootModel. It is a
+// post-construction setter rather than another parameter on NewRootBrowser,
+// whose signature already ends in a variadic widths ...[3]int and has call
+// sites and tests that should not churn. A nil p (or never calling this at
+// all) makes a divider-drag release a no-op beyond the in-memory width
+// change — persistence stays purely additive.
+func (r RootModel) WithBrowserWidthsPersister(p BrowserWidthsPersister) RootModel {
+	r.browser.persist = p
+	return r
 }
 
 // Init initializes whichever screen the root starts on. The bare-browser
@@ -343,6 +356,12 @@ type browserScreen struct {
 	// release sequence of mouse events the same way widths or focus does.
 	drag browserDrag
 
+	// persist saves dragged column widths outside the process (task 5). nil
+	// makes a drag release a no-op beyond the in-memory width change, so
+	// screens built without WithBrowserWidthsPersister behave exactly as
+	// before this task.
+	persist BrowserWidthsPersister
+
 	width, height int
 }
 
@@ -352,6 +371,38 @@ type browserScreen struct {
 type browserDrag struct {
 	active  bool
 	divider int
+}
+
+// BrowserWidthsPersister is the consumer-side interface app/ui declares for
+// saving the browser's dragged column widths outside the process (task 22's
+// --browser-widths flag persisted back to the config file). Per this
+// project's architecture principle ("consumer-side interfaces for external
+// deps"), app/ui only depends on this interface — the concrete
+// implementation (patching an INI config file) lives in the main package,
+// which never gets imported here.
+type BrowserWidthsPersister interface {
+	PersistBrowserWidths(widths [3]int) error
+}
+
+// persistWidthsCmd returns a tea.Cmd that saves b's current effective
+// widths via b.persist, or nil when no persister is attached (the default —
+// screens built without WithBrowserWidthsPersister never issue this
+// command). A failed save is logged as a [WARN] and otherwise ignored: a
+// broken config file write must never take the session down or block the
+// UI, so this never returns an error-carrying message for the caller to
+// react to.
+func (b browserScreen) persistWidthsCmd() tea.Cmd {
+	if b.persist == nil {
+		return nil
+	}
+	widths := b.effectiveWidths()
+	persist := b.persist
+	return func() tea.Msg {
+		if err := persist.PersistBrowserWidths(widths); err != nil {
+			log.Printf("[WARN] persist browser widths: %v", err)
+		}
+		return nil
+	}
 }
 
 // effectiveWidths returns b.widths, falling back to defaultBrowserWidths

@@ -733,8 +733,10 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 // that lands on a divider (dividerAt >= 0) starts a drag instead of falling
 // through to clickBrowser's ordinary entry-selection behavior; motion events
 // while a drag is active recompute the widths via resizeDividerTo; release
-// ends the drag. Motion or release with no drag in progress is a no-op —
-// there is nothing to swallow a normal click-drag-elsewhere sequence into.
+// ends the drag and issues persistWidthsCmd (task 5) to save the result via
+// the screen's BrowserWidthsPersister, if one is attached. Motion or release
+// with no drag in progress is a no-op — there is nothing to swallow a normal
+// click-drag-elsewhere sequence into.
 func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if b.overlay != nil && b.overlay.Active() {
 		return b.handleBrowserOverlayMouse(msg)
@@ -770,9 +772,7 @@ func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 				return b, nil
 			}
 			b.drag = browserDrag{}
-			// task 5 wires the persist-on-release command here; until then
-			// releasing a drag has no further side effect.
-			return b, nil
+			return b, b.persistWidthsCmd()
 		default:
 			return b, nil
 		}

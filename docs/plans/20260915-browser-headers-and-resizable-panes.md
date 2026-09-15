@@ -308,21 +308,21 @@ wins on the next launch, as with every other config-file key.
 - Modify: `app/ui/mouse.go`
 - Modify: `app/ui/browserresize_test.go`
 
-- [ ] declare `BrowserWidthsPersister` in `app/ui/root.go` with a doc comment
+- [x] declare `BrowserWidthsPersister` in `app/ui/root.go` with a doc comment
       explaining the consumer-side-interface rule it follows
-- [ ] add the `persist BrowserWidthsPersister` field to `browserScreen` and the
+- [x] add the `persist BrowserWidthsPersister` field to `browserScreen` and the
       `RootModel.WithBrowserWidthsPersister(p) RootModel` setter
-- [ ] add `browserScreen.persistWidthsCmd() tea.Cmd` returning nil when the
+- [x] add `browserScreen.persistWidthsCmd() tea.Cmd` returning nil when the
       persister is nil, otherwise a command that calls `PersistBrowserWidths`
       and logs a `[WARN]` line on error (a failed write must never take the
       session down or block the UI)
-- [ ] return that command from the drag-release branch added in task 4
-- [ ] write a test with a fake persister asserting it receives the dragged
+- [x] return that command from the drag-release branch added in task 4
+- [x] write a test with a fake persister asserting it receives the dragged
       widths after release
-- [ ] write a test asserting that a release with no drag in progress does not
+- [x] write a test asserting that a release with no drag in progress does not
       call the persister
-- [ ] write a test asserting a nil persister is safe (no panic, nil command)
-- [ ] run `go test ./app/ui/...` — must pass before task 6
+- [x] write a test asserting a nil persister is safe (no panic, nil command)
+- [x] run `go test ./app/ui/...` — must pass before task 6
 
 ### Task 6: Generalize the INI config patcher and implement the persister
 
