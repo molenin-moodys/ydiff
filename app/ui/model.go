@@ -344,7 +344,6 @@ type modeState struct {
 	showUntracked  bool           // true when untracked files are shown in tree
 	compact        bool           // true when diffs are fetched with small context around changes
 	compactContext int            // number of context lines around changes when compact is enabled
-	vimMotion      bool           // true when the --vim-motion preset is active (gates the vim-motion interceptor in handleKey)
 }
 
 // navigationState holds cursor and navigation-adjacent state.
@@ -493,18 +492,6 @@ type keyState struct {
 	hint         string // transient status-bar message; cleared on next key press
 }
 
-// vimState holds vim-motion preset state: count prefix accumulator and
-// pending letter leader. Distinct from keyState (ctrl/alt chord dispatch);
-// the two are orthogonal and run in different guards of handleKey. The vim
-// interceptor runs only when modes.vimMotion is true; when off, all fields
-// stay at their zero values. Invariant: count > 0 and leader != "" never
-// coexist (enforced in interceptor code, not types).
-type vimState struct {
-	count  int    // accumulated count prefix; 0 = none pending
-	leader string // pending letter leader: "g", "z", "Z", or ""
-	hint   string // transient status-bar message; cleared on next key press
-}
-
 // annotationState holds annotation input lifecycle state.
 type annotationState struct {
 	annotating         bool            // true when annotation text input is active
@@ -561,7 +548,6 @@ type Model struct {
 	editorState editorState       // transient hint state for source-file editor launches
 	output      outputState       // transient hint state for the O in-session output flush
 	keys        keyState          // chord-pending state and transient hint for leader-chord keybindings
-	vim         vimState          // count accumulator, pending letter leader, and transient hint for vim-motion preset
 	wheel       wheelState        // diff-pane mouse wheel coalescing (debounced render via wheelDebounceMsg)
 
 	ready        bool   // true after first WindowSizeMsg
@@ -741,11 +727,6 @@ type ModelConfig struct {
 	// contextualize). Computed once in main.go and copied into Model state.
 	// Follows the same pattern as CommitsApplicable.
 	CompactApplicable bool
-	// VimMotion enables the vim-style motion preset (counts, gg, G, zz/zt/zb,
-	// ZZ/ZQ). When true, the vim-motion interceptor in handleKey runs between
-	// the modal-key handler and keymap.Resolve. Copied into modes.vimMotion at
-	// construction; the feature is gated on that field everywhere.
-	VimMotion bool
 	// AnnotationMarker is the prefix shown before annotation lines.
 	// Empty is preserved so callers can intentionally render no marker.
 	AnnotationMarker string
@@ -870,7 +851,6 @@ func NewModel(cfg ModelConfig) (Model, error) {
 			showUntracked:  cfg.ShowUntracked && cfg.LoadUntracked != nil,
 			compact:        cfg.Compact && cfg.CompactApplicable,
 			compactContext: cfg.CompactContext,
-			vimMotion:      cfg.VimMotion,
 		},
 		commits: commitsState{
 			source:     cls,
@@ -966,7 +946,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.compact.hint = ""
 	m.editorState.hint = ""
 	m.keys.hint = ""
-	m.vim.hint = ""
 
 	// flush any deferred wheel work (cursor pin + diff render) before the key
 	// action runs — m.nav.diffCursor must be at its final pinned position
@@ -989,20 +968,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if handled, model, cmd := m.handleModalKey(msg); handled {
 		return model, cmd
-	}
-
-	// vim-motion interceptor: runs AFTER handleModalKey so modals consume keys
-	// first (digits and letters belong to the modal's textinput when active),
-	// and BEFORE keymap.Resolve so vim chords/counts preempt normal bindings.
-	// propagate the interceptor's model on fall-through so state cleared inside
-	// the interceptor (e.g., count dropped after an unrelated key like "5q")
-	// is visible to the standard keymap path that runs next.
-	if m.modes.vimMotion {
-		model, cmd, handled := m.interceptVimMotion(msg)
-		if handled {
-			return model, cmd
-		}
-		m = model.(Model)
 	}
 
 	action := m.keymap.Resolve(msg.String())
@@ -1079,8 +1044,8 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 
 func (m Model) handleOverlayOpen(action keymap.Action) (tea.Model, tea.Cmd, bool) {
 	// clear pending input state on any overlay-opening action so a pending chord
-	// or vim-motion count/leader never coexists with an active overlay. the
-	// non-overlay default case short-circuits below without touching state.
+	// never coexists with an active overlay. the non-overlay default case
+	// short-circuits below without touching state.
 	switch action {
 	case keymap.ActionHelp:
 		m.clearPendingInputState()
@@ -1103,16 +1068,15 @@ func (m Model) handleOverlayOpen(action keymap.Action) (tea.Model, tea.Cmd, bool
 	}
 }
 
-// clearPendingInputState clears all pending key-dispatch state: chord-pending,
-// chord hint, and vim-motion (count, leader, hint). Enforces the invariant
-// that these fields never coexist with an active modal. Called by modal-entry
-// paths (startSearch, startAnnotation, handleOverlayOpen) so a pending chord
-// or vim count never survives into a modal session — the early chord-second
-// guard in handleKey is defense-in-depth against accidental coexistence.
+// clearPendingInputState clears all pending key-dispatch state: chord-pending
+// and chord hint. Enforces the invariant that these fields never coexist with
+// an active modal. Called by modal-entry paths (startSearch, startAnnotation,
+// handleOverlayOpen) so a pending chord never survives into a modal session —
+// the early chord-second guard in handleKey is defense-in-depth against
+// accidental coexistence.
 func (m *Model) clearPendingInputState() {
 	m.keys.chordPending = ""
 	m.keys.hint = ""
-	m.vim = vimState{}
 }
 
 // handleInfo opens the unified info popup. The popup is always shown

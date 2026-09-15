@@ -356,8 +356,8 @@ func TestActionScrollConstants_InHelpEntries(t *testing.T) {
 }
 
 func TestActionScrollConstants_NoDefaultBindings(t *testing.T) {
-	// vim-motion interceptor is the only way to reach these actions by default;
-	// there must be NO single-key bindings in defaultBindings.
+	// these actions have no default single-key bindings; they are reachable
+	// only through a user-defined remap in the keybindings file.
 	km := Default()
 	for _, a := range []Action{ActionScrollCenter, ActionScrollTop, ActionScrollBottom} {
 		assert.Empty(t, km.KeysFor(a), "action %q must have no default bindings", a)
@@ -672,6 +672,25 @@ func TestLoad_withOverrides(t *testing.T) {
 	assert.Equal(t, ActionQuit, km.Resolve("q"))    // default still works
 	assert.Equal(t, Action(""), km.Resolve("j"))    // unmapped
 	assert.Equal(t, ActionDown, km.Resolve("down")) // other default still works
+}
+
+// TestLoad_customBindingOverridesDefault asserts that a "map" line for a key
+// that already carries a default binding replaces that default rather than
+// merely adding an alternate binding for a new key. This is the seam through
+// which a preset (e.g. a future vim-style remap) returns as configuration in
+// a keybindings file rather than as code: "j" defaults to ActionDown, and a
+// user remap of "j" must win.
+func TestLoad_customBindingOverridesDefault(t *testing.T) {
+	require.Equal(t, ActionDown, Default().Resolve("j"), "precondition: j defaults to ActionDown")
+
+	tmpFile := t.TempDir() + "/keybindings"
+	err := os.WriteFile(tmpFile, []byte("map j scroll_center\n"), 0o600)
+	require.NoError(t, err)
+
+	km, err := Load(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, ActionScrollCenter, km.Resolve("j"), "custom binding must override the default action for j")
+	assert.Equal(t, ActionUp, km.Resolve("k"), "unrelated default bindings must be unaffected")
 }
 
 func TestLoad_unmapThenRemap(t *testing.T) {

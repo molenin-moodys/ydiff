@@ -37,7 +37,6 @@ type options struct {
 	WordDiff              bool     `long:"word-diff" ini-name:"word-diff" env:"REVDIFF_WORD_DIFF" description:"highlight intra-line word-level changes in paired add/remove lines"`
 	AnnotationMarker      string   `long:"annotation-marker" ini-name:"annotation-marker" env:"REVDIFF_ANNOTATION_MARKER" default:"💬" description:"prefix shown before annotation lines"`
 	ExitCodeOnAnnotations bool     `long:"exit-code-on-annotations" ini-name:"exit-code-on-annotations" env:"REVDIFF_EXIT_CODE_ON_ANNOTATIONS" description:"exit 10 when annotations are produced"`
-	VimMotion             bool     `long:"vim-motion" ini-name:"vim-motion" env:"REVDIFF_VIM_MOTION" description:"enable vim-style motion preset (counts, gg, G, zz/zt/zb, ZZ/ZQ)"`
 	ChromaStyle           string   `long:"chroma-style" ini-name:"chroma-style" env:"REVDIFF_CHROMA_STYLE" default:"catppuccin-macchiato" description:"chroma style for syntax highlighting"`
 	AllFiles              bool     `long:"all-files" short:"A" no-ini:"true" description:"browse all tracked files, not just diffs (git only)"`
 	CompareOld            string   `long:"compare-old" no-ini:"true" description:"compare mode: old file path (use with --compare-new)"`

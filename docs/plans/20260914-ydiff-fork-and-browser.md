@@ -309,15 +309,15 @@ default theme `revdiff` -> `ydiff`.
 - Modify: `app/keymap/keymap_test.go`, `app/ui/handlers_test.go`, `app/ui/model_test.go`, `app/config_test.go`
 - Modify: `completions/*`, `docs/`
 
-- [ ] delete `app/ui/vimmotion.go` and its test
-- [ ] remove the `--vim-motion` flag, its config key and env binding from `app/config.go`
+- [x] delete `app/ui/vimmotion.go` and its test
+- [x] remove the `--vim-motion` flag, its config key and env binding from `app/config.go`
       and its wiring in `app/main.go`
-- [ ] remove the `vim vimState` field from `app/ui/model.go` and its dispatch in
+- [x] remove the `vim vimState` field from `app/ui/model.go` and its dispatch in
       `app/ui/handlers.go` and **`app/ui/view.go`** — the file revision 1 missed
-- [ ] verify the remappable keybindings file still loads and applies: that is the seam
+- [x] verify the remappable keybindings file still loads and applies: that is the seam
       through which a vim preset returns later as configuration, not code
-- [ ] add a test asserting a custom binding from the keybindings file overrides a default
-- [ ] run `go test ./...` — suite green before task 6
+- [x] add a test asserting a custom binding from the keybindings file overrides a default
+- [x] run `go test ./...` — suite green before task 6
 
 ### Task 6: Rename config directory, environment prefix and default theme
 
