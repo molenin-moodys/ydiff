@@ -434,15 +434,15 @@ default theme `revdiff` -> `ydiff`.
 *Ordered before navigation deliberately: building navigation synchronously first would mean
 reworking it to issue commands afterwards.*
 
-- [ ] write tests first: a load produces a message carrying its listing and the path it was
+- [x] write tests first: a load produces a message carrying its listing and the path it was
       requested for
-- [ ] write the stale-response test: a listing arriving for a path the user has already left
+- [x] write the stale-response test: a listing arriving for a path the user has already left
       is discarded, not rendered
-- [ ] implement directory reads as Bubble Tea commands returning a result message
-- [ ] implement the pending state behind an **injected clock**, so the ~150 ms placeholder
+- [x] implement directory reads as Bubble Tea commands returning a result message
+- [x] implement the pending state behind an **injected clock**, so the ~150 ms placeholder
       threshold is testable rather than flaky — a real clock in production, a fake in tests
-- [ ] write a test for a failing load reaching the model as a renderable error state
-- [ ] run `go test -race ./app/browser/...` — must pass before task 14
+- [x] write a test for a failing load reaching the model as a renderable error state
+- [x] run `go test -race ./app/browser/...` — must pass before task 14
 
 ### Task 14: browser — cursor and navigation
 
