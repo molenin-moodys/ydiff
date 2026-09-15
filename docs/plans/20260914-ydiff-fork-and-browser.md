@@ -605,15 +605,15 @@ not depend on flag parsing existing yet.*
 - Modify: `app/main.go`
 - Create: `app/routing_test.go`
 
-- [ ] write tests first for the routing matrix: bare `ydiff` opens the browser;
+- [x] write tests first for the routing matrix: bare `ydiff` opens the browser;
       `--only=<file>` opens review on that file; `ydiff main` and `ydiff main..feature` open
       review on that comparison; `--browser main` opens the browser with `branch` preselected
-- [ ] implement the routing decision as a pure function over parsed options, testable without
+- [x] implement the routing decision as a pure function over parsed options, testable without
       starting a terminal program
-- [ ] write a test asserting `--stdin` input still routes to review
-- [ ] write a test asserting bare `ydiff` outside any repository opens the browser with an
+- [x] write a test asserting `--stdin` input still routes to review
+- [x] write a test asserting bare `ydiff` outside any repository opens the browser with an
       empty changed pane
-- [ ] run `go test -race ./...` — must pass before task 24
+- [x] run `go test -race ./...` — must pass before task 24
 
 ### Task 24: End-to-end agent contract test
 

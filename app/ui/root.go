@@ -274,6 +274,16 @@ func (r RootModel) Store() *annotation.Store {
 	return r.review.Store()
 }
 
+// Discarded reports whether the user discarded annotations and quit,
+// exactly as the review screen's own Model.Discarded would. Forwarded for
+// the same reason as Store: main.go's post-run flush path (task 23) checks
+// this on the final *RootModel* tea.Program.Run returns, and must see the
+// same answer it would have read from a bare review Model before the
+// browser entry point existed.
+func (r RootModel) Discarded() bool {
+	return r.review.Discarded()
+}
+
 // View renders whichever screen is currently active.
 func (r RootModel) View() string {
 	if r.screen == ScreenBrowser {

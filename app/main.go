@@ -13,8 +13,10 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/molenin-moodys/ydiff/app/annotation"
+	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/diff"
 	"github.com/molenin-moodys/ydiff/app/fsutil"
+	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/highlight"
 	"github.com/molenin-moodys/ydiff/app/keymap"
 	"github.com/molenin-moodys/ydiff/app/theme"
@@ -130,6 +132,12 @@ func run(opts options) (int, error) {
 		return 0, err
 	}
 
+	// decideRoute is pure over opts: it never depends on being inside a
+	// repository, so it is computed up front and consulted below only to
+	// decide whether a "no repository" failure from setupVCSRenderer should
+	// be tolerated (browser route) or reported (review route).
+	decision := decideRoute(opts)
+
 	switch {
 	case opts.compareAbsOld != "":
 		renderer = diff.NewCompareReader(opts.compareAbsOld, opts.compareAbsNew)
@@ -144,7 +152,7 @@ func run(opts options) (int, error) {
 		programOptions = append(programOptions, tea.WithInput(tty))
 	default:
 		var setup vcsSetup
-		setup, err = setupVCSRenderer(opts)
+		setup, err = vcsSetupForRoute(opts, decision)
 		if err != nil {
 			return 0, err
 		}
@@ -243,28 +251,203 @@ func run(opts options) (int, error) {
 		return 0, fmt.Errorf("create model: %w", err)
 	}
 
-	p := tea.NewProgram(model, programOptions...)
+	// entryModel is what the tea.Program actually runs: NewRootReview for
+	// every diff-argument invocation (unchanged from before the browser
+	// existed — `q` exits the process, exactly as the Claude Code
+	// integration depends on), or a browser-rooted RootModel, with review
+	// pushed and popped behind it, when decision routes there (task 23).
+	var entryModel tea.Model
+	switch decision.screen {
+	case routeBrowser:
+		root, navCmd := buildRootBrowser(opts, model, km, res, decision.browserScope)
+		entryModel = initCmdModel{Model: root, extra: navCmd}
+	default:
+		entryModel = ui.NewRootReview(model)
+	}
+
+	p := tea.NewProgram(entryModel, programOptions...)
 	finalModel, err := p.Run()
 	if err != nil {
 		return 0, fmt.Errorf("TUI error: %w", err)
 	}
 
 	// output annotations to stdout or file
-	m, ok := finalModel.(ui.Model)
+	root, ok := unwrapRootModel(finalModel)
 	if !ok {
 		return 0, nil
 	}
-	if m.Discarded() {
+	if root.Discarded() {
 		return 0, nil
 	}
-	output := m.Store().FormatOutput()
+	output := root.Store().FormatOutput()
 	if output == "" {
 		return 0, nil
 	}
 
-	saveHistory(histReq{opts: opts, annotations: output, gitRoot: gitRoot, workDir: workDir, files: m.Store().Files()})
+	saveHistory(histReq{opts: opts, annotations: output, gitRoot: gitRoot, workDir: workDir, files: root.Store().Files()})
 
 	return writeAnnotationOutput(annotationOutputReq{opts: opts, output: output, stdout: os.Stdout})
+}
+
+// routeScreen identifies which of RootModel's two top-level screens
+// (app/ui/root.go) an invocation should start on.
+type routeScreen int
+
+const (
+	routeReview routeScreen = iota
+	routeBrowser
+)
+
+// routeDecision is the pure result of routing one invocation: which screen
+// to start on, and — only meaningful when screen is routeBrowser — which
+// changed-files scope to preselect the browser with.
+type routeDecision struct {
+	screen       routeScreen
+	browserScope gitstate.Scope
+}
+
+// decideRoute implements the task 23 startup routing matrix as a pure
+// function over parsed CLI options: no filesystem or git access, no
+// tea.Program construction, so the whole matrix is testable without
+// starting a terminal program (see app/routing_test.go).
+//
+//	ydiff                    -> browser, at the current directory
+//	ydiff --only=plan.md     -> review, single file (the planning plugin's path)
+//	ydiff main / main..feat  -> review, that comparison
+//	ydiff --browser main     -> browser, with `branch` scope preselected
+//
+// --browser always forces the browser screen, even alongside a diff
+// argument that would otherwise route to review (options.Browser's own doc
+// comment: "force the browser screen even when diff arguments are
+// present"). Absent --browser, any argument naming a concrete review target
+// routes to review, exactly as it always has for the Claude Code
+// integration (hasReviewTarget); a bare invocation with none of those falls
+// through to the browser, in ScopeUncommitted.
+func decideRoute(opts options) routeDecision {
+	if opts.Browser {
+		return routeDecision{screen: routeBrowser, browserScope: browserScopeFor(opts)}
+	}
+	if hasReviewTarget(opts) {
+		return routeDecision{screen: routeReview}
+	}
+	return routeDecision{screen: routeBrowser, browserScope: gitstate.ScopeUncommitted}
+}
+
+// hasReviewTarget reports whether opts names a concrete review target:
+// a ref/comparison, --only, --stdin, compare mode, or --all-files. Absent
+// --browser, any of these routes straight to review.
+func hasReviewTarget(opts options) bool {
+	return opts.Stdin ||
+		opts.compareAbsOld != "" ||
+		len(opts.Only) > 0 ||
+		opts.AllFiles ||
+		opts.ref() != ""
+}
+
+// browserScopeFor picks the changed-files scope --browser preselects the
+// browser with: ScopeBranch when a ref/comparison was also given
+// (`ydiff --browser main`, comparing against that branch's fork point),
+// ScopeUncommitted otherwise (`ydiff --browser`, working-tree changes).
+func browserScopeFor(opts options) gitstate.Scope {
+	if opts.ref() != "" {
+		return gitstate.ScopeBranch
+	}
+	return gitstate.ScopeUncommitted
+}
+
+// vcsSetupForRoute wraps setupVCSRenderer with one browser-only exception:
+// outside any git repository, setupVCSRenderer normally reports
+// errNoVCSRepository (no --only to fall back to standalone file review) —
+// exactly right for the review route, but wrong for the browser route, where
+// the design requires a bare `ydiff` outside a repository to still open the
+// browser with an empty changed pane rather than refusing to start. In that
+// one case this substitutes browserFallbackSetup's empty placeholder
+// renderer instead of propagating the error; every other error, and every
+// review-route error, is returned unchanged.
+func vcsSetupForRoute(opts options, decision routeDecision) (vcsSetup, error) {
+	setup, err := setupVCSRenderer(opts)
+	if err == nil {
+		return setup, nil
+	}
+	if decision.screen == routeBrowser && errors.Is(err, errNoVCSRepository) {
+		return browserFallbackSetup(), nil
+	}
+	return vcsSetup{}, err
+}
+
+// browserFallbackSetup returns the vcsSetup used to back the review screen
+// pushed behind the browser when the browser itself is standing outside any
+// git repository: a FileReader with no files (ChangedFiles returns nil, nil
+// harmlessly) rooted at the current directory, replaced the moment the user
+// picks a concrete file to review (RootModel.enterReview sets cfg.only and
+// reloads).
+func browserFallbackSetup() vcsSetup {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	return vcsSetup{renderer: diff.NewFileReader(nil, cwd), workDir: cwd}
+}
+
+// buildRootBrowser constructs the browser-rooted RootModel and the
+// navigation command that must run alongside its own Init (see
+// ui.NewRootBrowser's doc comment: the initial directory load command is
+// browser.NewNav's responsibility, not RootModel.Init's). The gitstate.Cache
+// is backed by a Loader that resolves --base-branch / per-repository
+// overrides (opts.resolveBaseBranch) fresh for whichever repository the
+// browser currently stands in, since the browser can navigate across
+// repository boundaries over its lifetime while a single flat override
+// could not.
+func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope) (ui.RootModel, tea.Cmd) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	nav, navCmd := browser.NewNav(cwd, false, nil)
+
+	cache := gitstate.NewCache(func(root string, s gitstate.Scope) ([]gitstate.ChangedFile, error) {
+		repo := &gitstate.Repo{Root: root}
+		if s == gitstate.ScopeBranch {
+			return gitstate.BranchScope(repo, opts.resolveBaseBranch(root))
+		}
+		return gitstate.UncommittedStatus(repo)
+	})
+
+	root := ui.NewRootBrowser(nav, km, review, cache, scope, res, opts.ResolvedBrowserWidths())
+	return root, navCmd
+}
+
+// initCmdModel wraps a tea.Model to run one extra command alongside its own
+// Init, without changing what Update/View do. It exists solely to batch
+// buildRootBrowser's navCmd (browser.Nav's initial directory load) alongside
+// RootModel.Init (which only issues the changed-files pane's own initial
+// load) when starting the tea.Program — the composition root's
+// responsibility per ui.NewRootBrowser's doc comment. Update's return value
+// is whatever the embedded Model's own Update returns (ui.RootModel, not
+// this wrapper), so it only exists for the very first Init call.
+type initCmdModel struct {
+	tea.Model
+	extra tea.Cmd
+}
+
+func (m initCmdModel) Init() tea.Cmd {
+	return tea.Batch(m.Model.Init(), m.extra)
+}
+
+// unwrapRootModel extracts the ui.RootModel that finished running, whether
+// tea.Program's final value is the plain RootModel (the ordinary case: at
+// least one Update ran) or still the initCmdModel wrapper (the edge case
+// where the program quit before any Update was processed).
+func unwrapRootModel(m tea.Model) (ui.RootModel, bool) {
+	switch fm := m.(type) {
+	case ui.RootModel:
+		return fm, true
+	case initCmdModel:
+		rm, ok := fm.Model.(ui.RootModel)
+		return rm, ok
+	default:
+		return ui.RootModel{}, false
+	}
 }
 
 type annotationOutputReq struct {

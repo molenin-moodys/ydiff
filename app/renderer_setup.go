@@ -8,6 +8,17 @@ import (
 	"github.com/molenin-moodys/ydiff/app/ui"
 )
 
+// errNoVCSRepository is returned by makeNoVCSRenderer when no VCS was
+// detected and --only was not given to fall back to standalone file review.
+// Task 23's browser routing path (main.go's run) distinguishes this specific
+// failure from any other setupVCSRenderer error: outside a repository, the
+// bare-browser entry point substitutes an empty placeholder renderer instead
+// of propagating the error, since a filesystem browser that refuses to start
+// outside a repository would be useless. Every other caller (the review
+// entry point, and setupVCSRenderer's own tests) still sees this as an
+// ordinary error.
+var errNoVCSRepository = errors.New("no git repository found (use --only to review standalone files)")
+
 type vcsSetup struct {
 	renderer           ui.Renderer
 	vcsType            diff.VCSType
@@ -93,7 +104,7 @@ func filterUntracked(fn func() ([]string, error), include, exclude []string) fun
 // --exclude is a no-op here (FileReader only returns the --only files).
 func makeNoVCSRenderer(only []string, cwd string) (ui.Renderer, string, error) {
 	if len(only) == 0 {
-		return nil, "", errors.New("no git repository found (use --only to review standalone files)")
+		return nil, "", errNoVCSRepository
 	}
 	return diff.NewFileReader(only, cwd), cwd, nil
 }
