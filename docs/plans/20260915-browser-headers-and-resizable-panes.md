@@ -360,16 +360,16 @@ wins on the next launch, as with every other config-file key.
 - Modify: `app/main.go`
 - Modify: `app/main_test.go` (or the nearest existing test file for `run()` wiring)
 
-- [ ] give `buildRootBrowser` a `configPath string` parameter (the caller at
+- [x] give `buildRootBrowser` a `configPath string` parameter (the caller at
       `app/main.go:280` already has `configPath` in scope from line ~203) and
       have it attach `&configStore{path: configPath}` via
       `WithBrowserWidthsPersister`
-- [ ] leave the persister off when `configPath` is empty
-- [ ] write a test asserting `buildRootBrowser` returns a RootModel whose
+- [x] leave the persister off when `configPath` is empty
+- [x] write a test asserting `buildRootBrowser` returns a RootModel whose
       browser screen carries a non-nil persister when a config path is given
       (add an exported-for-test accessor in `app/ui` only if one is genuinely
       needed; prefer testing the observable behaviour instead)
-- [ ] run `go test ./app/...` — must pass before task 8
+- [x] run `go test ./app/...` — must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 
