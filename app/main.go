@@ -277,7 +277,7 @@ func buildEntryModel(opts options) (entryModelResult, error) {
 	var entryModel tea.Model
 	switch decision.screen {
 	case routeBrowser:
-		root, navCmd := buildRootBrowser(opts, model, km, res, decision.browserScope)
+		root, navCmd := buildRootBrowser(opts, model, km, res, decision.browserScope, configPath)
 		entryModel = initCmdModel{Model: root, extra: navCmd}
 	default:
 		entryModel = ui.NewRootReview(model)
@@ -446,8 +446,12 @@ func browserFallbackSetup() vcsSetup {
 // overrides (opts.resolveBaseBranch) fresh for whichever repository the
 // browser currently stands in, since the browser can navigate across
 // repository boundaries over its lifetime while a single flat override
-// could not.
-func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope) (ui.RootModel, tea.Cmd) {
+// could not. configPath, when non-empty, attaches a *configStore as the
+// browser screen's BrowserWidthsPersister so a dragged divider is written
+// back into the INI config file; an empty configPath leaves the persister
+// off (dragging still resizes the panes for the current process, it just
+// is not remembered).
+func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res style.Resolver, scope gitstate.Scope, configPath string) (ui.RootModel, tea.Cmd) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		cwd = "."
@@ -463,6 +467,9 @@ func buildRootBrowser(opts options, review ui.Model, km *keymap.Keymap, res styl
 	})
 
 	root := ui.NewRootBrowser(nav, km, review, cache, scope, res, opts.ResolvedBrowserWidths())
+	if configPath != "" {
+		root = root.WithBrowserWidthsPersister(&configStore{path: configPath})
+	}
 	return root, navCmd
 }
 

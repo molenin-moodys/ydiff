@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jessevdk/go-flags"
@@ -909,6 +910,49 @@ func TestPatchConfigTheme_testdataRoundTrip(t *testing.T) {
 			assert.Equal(t, "nord", opts.Theme, "Theme must be populated from the default section after patch")
 		})
 	}
+}
+
+// TestPatchConfigKey_ConcurrentWritesDoNotDropUpdates is a regression test
+// for the second-round review finding: patchConfigKey is called from two
+// independent goroutines in production (the theme persister and the
+// browser-widths persister's tea.Cmd), each doing an unserialized
+// read-modify-write of the same config file. Before patchConfigKeyMu, two
+// overlapping calls could interleave so the call whose write lands last
+// wins even though its read predates the other call's write, silently
+// dropping whichever key was patched by the other one. Firing many
+// concurrent patches of two different keys and asserting every one of them
+// is present in the final file (not just "the file parses") catches that
+// lost-update race; run with -race to also confirm no data race on the
+// shared file.
+func TestPatchConfigKey_ConcurrentWritesDoNotDropUpdates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.WriteFile(path, []byte("wrap = true\n"), 0o600))
+
+	const rounds = 25
+	var wg sync.WaitGroup
+	for i := 0; i < rounds; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			assert.NoError(t, patchConfigKey(path, "theme", fmt.Sprintf("theme-%d", i)))
+		}(i)
+		go func(i int) {
+			defer wg.Done()
+			assert.NoError(t, patchConfigKey(path, "browser-widths", fmt.Sprintf("%d,%d,%d", i, i, i)))
+		}(i)
+	}
+	wg.Wait()
+
+	_, err := parsePatchedConfig(t, path)
+	require.NoError(t, err, "patched file must parse without a go-flags error after concurrent writes")
+
+	data, err := os.ReadFile(path) //nolint:gosec // test
+	require.NoError(t, err)
+	content := string(data)
+	assert.Regexp(t, `(?m)^theme = theme-\d+$`, content,
+		"the theme key must survive concurrent patching, not be dropped by an interleaved browser-widths write")
+	assert.Regexp(t, `(?m)^browser-widths = \d+,\d+,\d+$`, content,
+		"the browser-widths key must survive concurrent patching, not be dropped by an interleaved theme write")
 }
 
 func TestDefaultThemesDir_ResolvesUnderYdiffConfigDir(t *testing.T) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -186,7 +187,7 @@ func TestBuildRootBrowser_OutsideRepo_OpensWithEmptyChangedPane(t *testing.T) {
 	require.NotNil(t, setup.renderer)
 
 	review := newTestReviewModel(t)
-	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted)
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, "")
 
 	entry := initCmdModel{Model: root, extra: navCmd}
 	msgs := drainCmd(entry.Init())
@@ -199,6 +200,51 @@ func TestBuildRootBrowser_OutsideRepo_OpensWithEmptyChangedPane(t *testing.T) {
 	rm, ok := unwrapRootModel(updated)
 	require.True(t, ok)
 	assert.Contains(t, rm.View(), "not a git repository")
+}
+
+// TestBuildRootBrowser_ConfigPath_PersistsDraggedWidths verifies task 7's
+// wiring: buildRootBrowser given a non-empty configPath attaches a
+// *configStore as the browser screen's BrowserWidthsPersister, so dragging a
+// divider and releasing it writes a "browser-widths" line into that config
+// file. This exercises the observable behavior end to end (through the same
+// public Update path a real mouse drag takes) rather than reaching into
+// app/ui's unexported browserScreen fields.
+func TestBuildRootBrowser_ConfigPath_PersistsDraggedWidths(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/config"
+
+	review := newTestReviewModel(t)
+	root, navCmd := buildRootBrowser(options{}, review, keymap.Default(), style.PlainResolver(), gitstate.ScopeUncommitted, configPath)
+
+	entry := initCmdModel{Model: root, extra: navCmd}
+	msgs := drainCmd(entry.Init())
+	var updated tea.Model = root
+	for _, msg := range msgs {
+		updated, _ = updated.Update(msg)
+	}
+	updated, _ = updated.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// With the default 15/35/50 widths and width=120 (wide tier), the
+	// parent|current divider sits at screen column cells[0]+1 = 18 (see the
+	// plan's "Divider geometry": available = width-6 = 114,
+	// cells[0] = 114*15/100 = 17). Row 2 is within every box's content rows.
+	const divX, y = 18, 2
+	press := tea.MouseMsg{X: divX, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	motion := tea.MouseMsg{X: divX + 10, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion}
+	release := tea.MouseMsg{X: divX + 10, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease}
+
+	updated, _ = updated.Update(press)
+	updated, _ = updated.Update(motion)
+	updated, cmd := updated.Update(release)
+	require.NotNil(t, cmd, "a real drag-and-release must issue the persist command")
+	cmd() // run synchronously; any error is logged, not returned, by the wired command
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err, "buildRootBrowser must have attached a persister that wrote the config file")
+	assert.Contains(t, string(data), "browser-widths", "dragged widths must land under the browser-widths key")
+
+	_, ok := unwrapRootModel(updated)
+	require.True(t, ok)
 }
 
 // drainCmd runs cmd and, if it produced a tea.BatchMsg, flattens each of its

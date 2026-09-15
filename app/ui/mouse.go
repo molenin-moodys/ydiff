@@ -556,19 +556,183 @@ func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
 	}
 }
 
+// minColumnWidth is the smallest cell width a drag will leave a Miller
+// column at: enough room for a truncated entry name plus its trailing "/"
+// directory marker, so a dragged-thin column still reads as a column rather
+// than degenerating into an unusable sliver.
+const minColumnWidth = 8
+
+// dividerAt classifies a screen coordinate as sitting on a draggable divider
+// between two Miller-column boxes, returning its global index (0 =
+// parent|current, 1 = current|changed) or -1 when (x, y) is not on a
+// divider. It mirrors columnXRanges' tier logic (and, transitively,
+// browserview.go's renderThreeColumns/renderTwoColumns box math) rather than
+// re-deriving the geometry independently, so the two never drift apart. A
+// divider spans every row the column boxes' borders occupy: row 1 (top
+// border) through ph+2 (bottom border), where ph is paneContentHeight().
+// Below mediumTierWidth there is a single, undivided pane, so this always
+// returns -1 there.
+func (b browserScreen) dividerAt(x, y int) int {
+	if b.width <= 0 || b.height <= 0 {
+		return -1
+	}
+	ph := b.paneContentHeight()
+	if y < 1 || y > ph+2 {
+		return -1
+	}
+
+	widths := b.effectiveWidths()
+	switch {
+	case b.width >= wideTierWidth:
+		available := max(b.width-6, 0)
+		cells := distributeWidths(available, []int{widths[0], widths[1], widths[2]})
+		if x == cells[0]+1 || x == cells[0]+2 {
+			return 0
+		}
+		if x == cells[0]+cells[1]+3 || x == cells[0]+cells[1]+4 {
+			return 1
+		}
+		return -1
+	case b.width >= mediumTierWidth:
+		available := max(b.width-4, 0)
+		cells := distributeWidths(available, []int{widths[1], widths[2]})
+		if x == cells[0]+1 || x == cells[0]+2 {
+			return 1
+		}
+		return -1
+	default:
+		return -1
+	}
+}
+
+// resizeDividerTo recomputes column widths from a divider drag's pointer
+// position, per the design's "Drag arithmetic" section, and writes the
+// result back into b.widths. It reports whether b.widths actually changed —
+// a drag that lands back on the same cell widths (or targets a tier/divider
+// combination that does not exist) is a no-op and returns false, so a caller
+// driving a persistence command off the return value never fires one for a
+// non-event.
+//
+// newLeft is clamped to [minEach, pairTotal-minEach], where minEach is
+// normally minColumnWidth but shrinks to pairTotal/2 when the pair doesn't
+// have 2*minColumnWidth to give between them at all (e.g. a tiny persisted
+// proportion re-hydrated at a narrower terminal via distributeWidths). This
+// still lets the user push the divider to an even split rather than
+// rejecting the drag outright: a hard reject here left the divider
+// grabbable (dividerAt doesn't know about the shortage) but permanently
+// unresponsive, with widths only recoverable by widening the terminal,
+// dragging a different divider, or hand-editing the config file.
+//
+// The third, untouched cell (the column not part of the dragged pair) is
+// still floored to 1 before the write-back: distributeWidths legitimately
+// returns 0 for a column whose normalized share rounds below one cell (e.g.
+// a "1,1,1000"-style --browser-widths at a merely-wide terminal), and a
+// persisted 0 makes parseBrowserWidths reject the config file on the next
+// launch, permanently bricking startup. Without this floor that 0 flows
+// straight from distributeWidths into b.widths untouched.
+//
+// In the medium tier only divider 1 exists (the parent column is off
+// screen), so the write-back preserves the hidden parent's proportion by
+// rescaling it against the pair's new combined width, guarding against a
+// zero denominator when the previous pair had no width at all.
+func (b *browserScreen) resizeDividerTo(divider, x int) bool {
+	oldWidths := b.effectiveWidths()
+
+	switch {
+	case b.width >= wideTierWidth:
+		if divider < 0 || divider > 1 {
+			return false
+		}
+		available := max(b.width-6, 0)
+		cells := distributeWidths(available, []int{oldWidths[0], oldWidths[1], oldWidths[2]})
+
+		leftEdge := 0
+		if divider == 1 {
+			leftEdge = cells[0] + 2
+		}
+		pairTotal := cells[divider] + cells[divider+1]
+		minEach := minPairShare(pairTotal)
+		newLeft := clampInt(x-leftEdge-1, minEach, pairTotal-minEach)
+		cells[divider], cells[divider+1] = newLeft, pairTotal-newLeft
+		for i := range cells {
+			cells[i] = max(cells[i], 1)
+		}
+
+		newWidths := [3]int{cells[0], cells[1], cells[2]}
+		if newWidths == oldWidths {
+			return false
+		}
+		b.widths = newWidths
+		return true
+
+	case b.width >= mediumTierWidth:
+		if divider != 1 {
+			return false
+		}
+		available := max(b.width-4, 0)
+		cells := distributeWidths(available, []int{oldWidths[1], oldWidths[2]})
+
+		pairTotal := cells[0] + cells[1]
+		minEach := minPairShare(pairTotal)
+		newLeft := clampInt(x-1, minEach, pairTotal-minEach)
+		cells[0], cells[1] = newLeft, pairTotal-newLeft
+
+		denom := oldWidths[1] + oldWidths[2]
+		parent := max(1, oldWidths[0])
+		if denom > 0 {
+			parent = max(1, oldWidths[0]*(cells[0]+cells[1])/denom)
+		}
+		newWidths := [3]int{parent, cells[0], cells[1]}
+		if newWidths == oldWidths {
+			return false
+		}
+		b.widths = newWidths
+		return true
+
+	default:
+		return false
+	}
+}
+
+// clampInt restricts v to [lo, hi]. Used by resizeDividerTo's drag
+// arithmetic; lo <= hi always holds because minPairShare never exceeds
+// pairTotal/2.
+func clampInt(v, lo, hi int) int {
+	return max(lo, min(v, hi))
+}
+
+// minPairShare returns the minimum width resizeDividerTo will leave each
+// side of a dragged divider's pair. It is normally minColumnWidth, but for a
+// pair too small to give minColumnWidth to both sides (pairTotal <
+// 2*minColumnWidth) it falls back to pairTotal/2, splitting the pair evenly
+// instead of refusing the drag. That shortage is reachable at runtime: a
+// column count is persisted as a normalized *proportion*, not a cell width,
+// so a pair dragged down to the minimum on a wide terminal and then
+// rehydrated via distributeWidths at a much narrower terminal can land
+// below 2*minColumnWidth even though the original drag never violated the
+// minimum in cell space.
+func minPairShare(pairTotal int) int {
+	if pairTotal < 2*minColumnWidth {
+		return pairTotal / 2
+	}
+	return minColumnWidth
+}
+
 // hitTest classifies a browser-screen screen coordinate into a
 // browserHitZone plus the entry row within that pane (0-based, before
 // scroll-offset translation; -1 when the zone has no per-row meaning, e.g.
-// a column header). Row 0 of every column box is its top border, row 1 is
-// always the header line (directory name, or "changed - <scope>" for the
-// changed pane), and entry rows start at row 2 — mirroring diffTopRow's
+// the changed pane's scope header). Row 0 is the path header and row 1 is
+// every box's top border. The current column no longer has a header row of
+// its own (task 1 dropped the per-column directory name), so its content
+// starts at row 2; the changed pane still has its "changed - <scope>" header
+// at row 2, so its content starts at row 3 — mirroring diffTopRow's
 // border+header accounting in the review screen's own hitTest.
 func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 	if b.width <= 0 || b.height <= 0 || x < 0 || y < 0 || x >= b.width || y >= b.height {
 		return browserHitNone, -1
 	}
-	// Row 0 is the path header and row 1 each box's top border, so a
-	// column's own header sits at row 2 and its content runs from row 3.
+	// Row 0 is the path header and row 1 every box's top border, so box
+	// content starts at row 2.
 	ph := b.paneContentHeight()
 	if y <= 1 || y > ph+1 {
 		return browserHitNone, -1 // path header, top border, or bottom border/status bar and beyond
@@ -579,10 +743,7 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 
 	switch {
 	case inRange(currentX):
-		if y == 2 {
-			return browserHitNone, -1 // header row: directory name, not clickable
-		}
-		return browserHitCurrent, y - 3
+		return browserHitCurrent, y - 2
 	case inRange(changedX):
 		if y == 2 {
 			return browserHitChangedHeader, -1
@@ -597,9 +758,38 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 // dispatch takes priority (mirrors Model.handleOverlayMouse), then wheel and
 // left-click are handled; every other button is a no-op, matching the
 // review screen's handleMouse.
+//
+// Left-button handling additionally drives a divider drag (task 4): a press
+// that lands on a divider (dividerAt >= 0) starts a drag instead of falling
+// through to clickBrowser's ordinary entry-selection behavior; motion events
+// while a drag is active recompute the widths via resizeDividerTo, latching
+// b.drag.changed once any motion actually moves them; release ends the drag
+// and issues persistWidthsCmd (task 5) to save the result via the screen's
+// BrowserWidthsPersister, if one is attached — but only when b.drag.changed,
+// so a bare click on a divider (no motion at all) never rewrites the config
+// file. Motion or release with no drag in progress is a no-op — there is
+// nothing to swallow a normal click-drag-elsewhere sequence into.
+//
+// A release is recognized regardless of which button tea reports it against:
+// a terminal without SGR extended mouse mode (mode 1006) reports a release
+// via the X10 fallback encoding as Button: MouseButtonNone, which would
+// otherwise never reach the MouseButtonLeft case below and leave the drag
+// stuck active — so any later button-held motion anywhere on screen would
+// keep resizing the divider. A fresh press also unconditionally clears any
+// stale drag state before deciding whether it lands on a divider, for the
+// same reason.
 func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if b.overlay != nil && b.overlay.Active() {
 		return b.handleBrowserOverlayMouse(msg)
+	}
+
+	if msg.Action == tea.MouseActionRelease && b.drag.active {
+		changed := b.drag.changed
+		b.drag = browserDrag{}
+		if changed {
+			return b, b.persistWidthsCmd()
+		}
+		return b, nil
 	}
 
 	switch msg.Button {
@@ -614,10 +804,25 @@ func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 		}
 		return b.handleBrowserWheel(1)
 	case tea.MouseButtonLeft:
-		if msg.Action != tea.MouseActionPress {
+		switch msg.Action {
+		case tea.MouseActionPress:
+			b.drag = browserDrag{}
+			if d := b.dividerAt(msg.X, msg.Y); d >= 0 {
+				b.drag = browserDrag{active: true, divider: d}
+				return b, nil
+			}
+			return b.clickBrowser(msg.X, msg.Y)
+		case tea.MouseActionMotion:
+			if !b.drag.active {
+				return b, nil
+			}
+			if b.resizeDividerTo(b.drag.divider, msg.X) {
+				b.drag.changed = true
+			}
+			return b, nil
+		default:
 			return b, nil
 		}
-		return b.clickBrowser(msg.X, msg.Y)
 	default:
 		return b, nil
 	}
@@ -673,7 +878,7 @@ func (b browserScreen) clickBrowser(x, y int) (tea.Model, tea.Cmd) {
 // falls out of that for free, exactly like pressing Enter would.
 func (b browserScreen) clickCurrentEntry(row int) (tea.Model, tea.Cmd) {
 	entries := b.nav.VisibleEntries()
-	body := max(b.paneContentHeight()-1, 0)
+	body := b.paneContentHeight()
 	offset, _ := paneScrollWindow(len(entries), body, b.nav.Cursor())
 	idx := offset + row
 	if idx < 0 || idx >= len(entries) {
@@ -759,6 +964,7 @@ var browserMouseHelpEntries = []overlay.HelpEntry{
 	{Keys: "Click", Description: "select entry / enter directory / move focus to that pane"},
 	{Keys: "Click (changed header)", Description: "toggle uncommitted / branch scope"},
 	{Keys: "Wheel", Description: "scroll the focused pane"},
+	{Keys: "Drag (column border)", Description: "resize the columns; saved to the config file"},
 }
 
 // buildBrowserHelpSpec builds the browser screen's help overlay content: a

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"log"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +107,18 @@ func NewRootBrowser(
 		gitCache: gitCache,
 		scope:    scope,
 	}
+}
+
+// WithBrowserWidthsPersister attaches p as the browser screen's
+// BrowserWidthsPersister and returns the updated RootModel. It is a
+// post-construction setter rather than another parameter on NewRootBrowser,
+// whose signature already ends in a variadic widths ...[3]int and has call
+// sites and tests that should not churn. A nil p (or never calling this at
+// all) makes a divider-drag release a no-op beyond the in-memory width
+// change — persistence stays purely additive.
+func (r RootModel) WithBrowserWidthsPersister(p BrowserWidthsPersister) RootModel {
+	r.browser.persist = p
+	return r
 }
 
 // Init initializes whichever screen the root starts on. The bare-browser
@@ -336,7 +349,65 @@ type browserScreen struct {
 	// --browser-widths flag). A zero value means "use defaultBrowserWidths".
 	widths [3]int
 
+	// drag tracks an in-progress divider drag (task 4's mouse-driven pane
+	// resize). It is plain value state on browserScreen like everything else
+	// here: RootModel.updateBrowser assigns the updated browserScreen back
+	// after every Update, so the drag survives across the press/motion/
+	// release sequence of mouse events the same way widths or focus does.
+	drag browserDrag
+
+	// persist saves dragged column widths outside the process (task 5). nil
+	// makes a drag release a no-op beyond the in-memory width change, so
+	// screens built without WithBrowserWidthsPersister behave exactly as
+	// before this task.
+	persist BrowserWidthsPersister
+
 	width, height int
+}
+
+// browserDrag is the in-progress state of a divider drag: which divider (if
+// any) is currently being dragged. active is false between drags; divider
+// and changed are only meaningful while active is true. changed tracks
+// whether any motion event during this drag actually moved b.widths (per
+// resizeDividerTo's bool return), so a bare press-and-release with no
+// intervening motion — or motion clamped back to the same widths — does not
+// issue a config-file write on release.
+type browserDrag struct {
+	active  bool
+	divider int
+	changed bool
+}
+
+// BrowserWidthsPersister is the consumer-side interface app/ui declares for
+// saving the browser's dragged column widths outside the process (task 22's
+// --browser-widths flag persisted back to the config file). Per this
+// project's architecture principle ("consumer-side interfaces for external
+// deps"), app/ui only depends on this interface — the concrete
+// implementation (patching an INI config file) lives in the main package,
+// which never gets imported here.
+type BrowserWidthsPersister interface {
+	PersistBrowserWidths(widths [3]int) error
+}
+
+// persistWidthsCmd returns a tea.Cmd that saves b's current effective
+// widths via b.persist, or nil when no persister is attached (the default —
+// screens built without WithBrowserWidthsPersister never issue this
+// command). A failed save is logged as a [WARN] and otherwise ignored: a
+// broken config file write must never take the session down or block the
+// UI, so this never returns an error-carrying message for the caller to
+// react to.
+func (b browserScreen) persistWidthsCmd() tea.Cmd {
+	if b.persist == nil {
+		return nil
+	}
+	widths := b.effectiveWidths()
+	persist := b.persist
+	return func() tea.Msg {
+		if err := persist.PersistBrowserWidths(widths); err != nil {
+			log.Printf("[WARN] persist browser widths: %v", err)
+		}
+		return nil
+	}
 }
 
 // effectiveWidths returns b.widths, falling back to defaultBrowserWidths
@@ -368,6 +439,11 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		b.width, b.height = msg.Width, msg.Height
+		// The geometry a drag started from (column x-ranges, divider
+		// positions) no longer exists once the terminal resizes, so any
+		// in-progress drag is abandoned rather than resuming against stale
+		// coordinates.
+		b.drag = browserDrag{}
 		return b, nil
 	case browser.LoadedMsg:
 		b.nav.Apply(msg)
@@ -592,8 +668,8 @@ var defaultBrowserWidths = [3]int{15, 35, 50}
 // bar (RenderBrowserView, task 19), with the changed-files pane's content
 // pre-rendered at the exact width that view will place it into.
 func (b browserScreen) View() string {
-	ph := max(b.height-3, 1)   // status bar row + column box borders, see RenderBrowserView
-	bodyHeight := max(ph-1, 0) // minus the changed pane's own header line, mirroring renderChangedColumn
+	ph := b.paneContentHeight() // derived from browserChromeRows, mirroring RenderBrowserView exactly
+	bodyHeight := max(ph-1, 0)  // minus the changed pane's own header line, mirroring renderChangedColumn
 
 	widths := b.effectiveWidths()
 
