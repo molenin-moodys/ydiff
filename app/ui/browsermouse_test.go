@@ -365,3 +365,38 @@ func TestBrowserMouse_ScrolledCurrentColumn_ClickMapsToAbsoluteIndex(t *testing.
 
 	assert.Equal(t, offset, root.browser.nav.Cursor(), "click on the visible window's first row selects the offset entry")
 }
+
+// TestDisplayBrowserKey_UppercaseLetterGetsShiftPrefix verifies the fix for
+// the theme-selector hint being a bare, easy-to-miss "T": a single uppercase
+// ASCII letter (bubbletea's raw representation of Shift+<letter> for a
+// printable key — there is no separate "shift+" modifier prefix the way
+// there is for Ctrl/Alt) is spelled out as "shift+<lower>" for display.
+func TestDisplayBrowserKey_UppercaseLetterGetsShiftPrefix(t *testing.T) {
+	assert.Equal(t, "shift+t", displayBrowserKey("T"))
+	assert.Equal(t, "shift+f", displayBrowserKey("F"))
+}
+
+// TestDisplayBrowserKey_OtherKeysPassThroughUnchanged verifies the
+// prettifier only touches bare single uppercase letters — every other key
+// shape (lowercase, multi-char names, ctrl-prefixed, punctuation) must
+// render exactly as bound, unchanged.
+func TestDisplayBrowserKey_OtherKeysPassThroughUnchanged(t *testing.T) {
+	for _, key := range []string{"t", "tab", "esc", "ctrl+f", "/", "?", "."} {
+		assert.Equal(t, key, displayBrowserKey(key), "key %q must pass through unchanged", key)
+	}
+}
+
+// TestBrowserMouse_HelpOverlay_ThemeSelectShownAsShiftT verifies the browser
+// help overlay's "Browser" section spells the theme-selector binding out as
+// "shift+t" rather than the bare "T" bubbletea reports it as.
+func TestBrowserMouse_HelpOverlay_ThemeSelectShownAsShiftT(t *testing.T) {
+	dir := t.TempDir()
+	root := wideBrowserRoot(t, dir)
+
+	updated, _ := root.Update(keyMsg('?'))
+	root = updated.(RootModel)
+
+	view := root.View()
+	assert.Contains(t, view, "shift+t")
+	assert.NotContains(t, view, "| T ", "the bare, un-prettified key must not appear in the overlay")
+}

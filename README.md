@@ -86,7 +86,7 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | `Tab` | move focus between the current-directory column and the changed-files pane |
 | `Ctrl+F` | star/unstar the current directory as a favorite |
 | `f` | open the favorites popup — `Enter` jumps there and closes the popup, `Delete` removes the entry under the cursor, `Esc` closes |
-| `T` | open the theme selector — the same popup and themes as the review screen |
+| `Shift+T` | open the theme selector — the same popup and themes as the review screen |
 | `q` | quit |
 | `?` | help |
 | mouse | click to select or enter, wheel to scroll; the scope label in the changed-files header is clickable; drag the border between two columns to resize them |
@@ -154,7 +154,7 @@ hand-edit directly.
 
 ### Theme selector
 
-`T` opens the same theme selector the review screen uses: type to filter, `Up`/`Down` to move the cursor and preview live, `Enter`
+`Shift+T` opens the same theme selector the review screen uses: type to filter, `Up`/`Down` to move the cursor and preview live, `Enter`
 confirms and persists the choice to the config file, `Esc` cancels and restores
 whatever theme was active before you opened the popup. `--no-colors` still wins —
 choosing a theme while colors are disabled keeps the browser plain, exactly like the
