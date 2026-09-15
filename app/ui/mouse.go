@@ -556,6 +556,138 @@ func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
 	}
 }
 
+// minColumnWidth is the smallest cell width a drag will leave a Miller
+// column at: enough room for a truncated entry name plus its trailing "/"
+// directory marker, so a dragged-thin column still reads as a column rather
+// than degenerating into an unusable sliver.
+const minColumnWidth = 8
+
+// dividerAt classifies a screen coordinate as sitting on a draggable divider
+// between two Miller-column boxes, returning its global index (0 =
+// parent|current, 1 = current|changed) or -1 when (x, y) is not on a
+// divider. It mirrors columnXRanges' tier logic (and, transitively,
+// browserview.go's renderThreeColumns/renderTwoColumns box math) rather than
+// re-deriving the geometry independently, so the two never drift apart. A
+// divider spans every row the column boxes' borders occupy: row 1 (top
+// border) through ph+2 (bottom border), where ph is paneContentHeight().
+// Below mediumTierWidth there is a single, undivided pane, so this always
+// returns -1 there.
+func (b browserScreen) dividerAt(x, y int) int {
+	if b.width <= 0 || b.height <= 0 {
+		return -1
+	}
+	ph := b.paneContentHeight()
+	if y < 1 || y > ph+2 {
+		return -1
+	}
+
+	widths := b.effectiveWidths()
+	switch {
+	case b.width >= wideTierWidth:
+		available := max(b.width-6, 0)
+		cells := distributeWidths(available, []int{widths[0], widths[1], widths[2]})
+		if x == cells[0]+1 || x == cells[0]+2 {
+			return 0
+		}
+		if x == cells[0]+cells[1]+3 || x == cells[0]+cells[1]+4 {
+			return 1
+		}
+		return -1
+	case b.width >= mediumTierWidth:
+		available := max(b.width-4, 0)
+		cells := distributeWidths(available, []int{widths[1], widths[2]})
+		if x == cells[0]+1 || x == cells[0]+2 {
+			return 1
+		}
+		return -1
+	default:
+		return -1
+	}
+}
+
+// resizeDividerTo recomputes column widths from a divider drag's pointer
+// position, per the design's "Drag arithmetic" section, and writes the
+// result back into b.widths. It reports whether b.widths actually changed —
+// a drag that lands back on the same cell widths (or targets a tier/divider
+// combination that does not exist) is a no-op and returns false, so a caller
+// driving a persistence command off the return value never fires one for a
+// non-event.
+//
+// newLeft is clamped to [minColumnWidth, pairTotal-minColumnWidth]; if the
+// dragged pair does not have 2*minColumnWidth to give between them at all,
+// the drag is rejected outright (no clamp could produce a sane split).
+//
+// In the medium tier only divider 1 exists (the parent column is off
+// screen), so the write-back preserves the hidden parent's proportion by
+// rescaling it against the pair's new combined width, guarding against a
+// zero denominator when the previous pair had no width at all.
+func (b *browserScreen) resizeDividerTo(divider, x int) bool {
+	oldWidths := b.effectiveWidths()
+
+	switch {
+	case b.width >= wideTierWidth:
+		if divider < 0 || divider > 1 {
+			return false
+		}
+		available := max(b.width-6, 0)
+		cells := distributeWidths(available, []int{oldWidths[0], oldWidths[1], oldWidths[2]})
+
+		leftEdge := 0
+		if divider == 1 {
+			leftEdge = cells[0] + 2
+		}
+		pairTotal := cells[divider] + cells[divider+1]
+		if pairTotal < 2*minColumnWidth {
+			return false
+		}
+		newLeft := clampInt(x-leftEdge-1, minColumnWidth, pairTotal-minColumnWidth)
+		cells[divider], cells[divider+1] = newLeft, pairTotal-newLeft
+
+		newWidths := [3]int{cells[0], cells[1], cells[2]}
+		if newWidths == oldWidths {
+			return false
+		}
+		b.widths = newWidths
+		return true
+
+	case b.width >= mediumTierWidth:
+		if divider != 1 {
+			return false
+		}
+		available := max(b.width-4, 0)
+		cells := distributeWidths(available, []int{oldWidths[1], oldWidths[2]})
+
+		pairTotal := cells[0] + cells[1]
+		if pairTotal < 2*minColumnWidth {
+			return false
+		}
+		newLeft := clampInt(x-0-1, minColumnWidth, pairTotal-minColumnWidth)
+		cells[0], cells[1] = newLeft, pairTotal-newLeft
+
+		denom := oldWidths[1] + oldWidths[2]
+		parent := max(1, oldWidths[0])
+		if denom > 0 {
+			parent = max(1, oldWidths[0]*(cells[0]+cells[1])/denom)
+		}
+		newWidths := [3]int{parent, cells[0], cells[1]}
+		if newWidths == oldWidths {
+			return false
+		}
+		b.widths = newWidths
+		return true
+
+	default:
+		return false
+	}
+}
+
+// clampInt restricts v to [lo, hi]. Used by resizeDividerTo's drag
+// arithmetic; assumes lo <= hi (callers already reject pairs with no room,
+// which is the only way lo could exceed hi here).
+func clampInt(v, lo, hi int) int {
+	return max(lo, min(v, hi))
+}
+
 // hitTest classifies a browser-screen screen coordinate into a
 // browserHitZone plus the entry row within that pane (0-based, before
 // scroll-offset translation; -1 when the zone has no per-row meaning, e.g.

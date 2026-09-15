@@ -252,26 +252,26 @@ wins on the next launch, as with every other config-file key.
 - Modify: `app/ui/mouse.go`
 - Create: `app/ui/browserresize_test.go`
 
-- [ ] add `const minColumnWidth = 8` with a comment explaining the choice
-- [ ] add `func (b browserScreen) dividerAt(x, y int) int` returning the global
+- [x] add `const minColumnWidth = 8` with a comment explaining the choice
+- [x] add `func (b browserScreen) dividerAt(x, y int) int` returning the global
       divider index (`0` = parent|current, `1` = current|changed) or `-1`,
       implementing the geometry in this plan's Technical Details; it must
       mirror `columnXRanges`'s tier logic rather than re-deriving it loosely,
       and must return `-1` below `mediumTierWidth`
-- [ ] add `func (b *browserScreen) resizeDividerTo(divider, x int) bool`
+- [x] add `func (b *browserScreen) resizeDividerTo(divider, x int) bool`
       implementing the drag arithmetic and write-back from this plan; returns
       true when `b.widths` actually changed
-- [ ] write table tests for `dividerAt`: both dividers in the wide tier, only
+- [x] write table tests for `dividerAt`: both dividers in the wide tier, only
       divider 1 in the medium tier, `-1` in the narrow tier, `-1` outside the
       box rows, `-1` on ordinary content columns
-- [ ] write table tests for `resizeDividerTo`: a plain drag left and right, the
+- [x] write table tests for `resizeDividerTo`: a plain drag left and right, the
       `minColumnWidth` clamp at both ends, a no-op when the pair has no room, a
       drag that leaves widths unchanged returning false, and a medium-tier drag
       preserving the hidden parent column's share
-- [ ] write a test that the widths produced by a drag, fed back through
+- [x] write a test that the widths produced by a drag, fed back through
       `distributeWidths`, reproduce the dragged-to cell widths exactly (the
       property that makes cell counts usable as proportions)
-- [ ] run `go test ./app/ui/...` — must pass before task 4
+- [x] run `go test ./app/ui/...` — must pass before task 4
 
 ### Task 4: Wire the drag through the browser's mouse handling
 
