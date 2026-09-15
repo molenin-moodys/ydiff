@@ -284,6 +284,17 @@ func (r RootModel) Discarded() bool {
 	return r.review.Discarded()
 }
 
+// BrowserPath reports the directory the browser was last standing in, and
+// false when this invocation had no browser at all (the straight-into-review
+// entry point). main.go writes it to --cwd-file so a shell wrapper can cd
+// there on exit, the way yazi's `y` function does.
+func (r RootModel) BrowserPath() (string, bool) {
+	if !r.hasBrowser || r.browser.nav == nil {
+		return "", false
+	}
+	return r.browser.nav.Path(), true
+}
+
 // View renders whichever screen is currently active.
 func (r RootModel) View() string {
 	if r.screen == ScreenBrowser {
@@ -410,6 +421,14 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.moveCursor(-1)
 	case keymap.ActionBrowserDown:
 		b.moveCursor(1)
+	case keymap.ActionBrowserPageUp:
+		b.moveCursor(-b.paneContentHeight())
+	case keymap.ActionBrowserPageDown:
+		b.moveCursor(b.paneContentHeight())
+	case keymap.ActionBrowserHome:
+		b.moveCursor(-cursorJumpToEdge)
+	case keymap.ActionBrowserEnd:
+		b.moveCursor(cursorJumpToEdge)
 	case keymap.ActionBrowserEnter:
 		if b.nav.Filter().Editing() {
 			b.nav.FilterApply()
@@ -420,6 +439,14 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return b, b.navChanged(b.nav.Enter())
 	case keymap.ActionBrowserUpLevel:
+		// With the changed-files pane focused, left is the natural inverse
+		// of the Tab that got you there: it returns focus to the directory
+		// columns rather than navigating the filesystem out from under a
+		// pane the cursor is not even in.
+		if b.focus == BrowserFocusChanged {
+			b.focus = BrowserFocusCurrent
+			return b, nil
+		}
 		return b, b.navChanged(b.nav.Up())
 	case keymap.ActionBrowserFilter:
 		b.nav.FilterStart()
@@ -467,6 +494,14 @@ func (b browserScreen) handleBrowserOverlayKey(msg tea.KeyMsg) (tea.Model, tea.C
 
 // moveCursor moves whichever pane currently holds focus, so Up/Down behave
 // identically in the middle column and the changed-files pane.
+// cursorJumpToEdge is the delta Home and End pass to moveCursor. Both cursor
+// implementations clamp to their list bounds — Nav against the *filtered*
+// visible count, changedPane against its file count — so an oversized delta
+// lands exactly on the first or last entry without either pane needing to
+// expose its length here. Kept well below math.MaxInt32 so cursor+delta
+// cannot overflow.
+const cursorJumpToEdge = 1 << 30
+
 func (b browserScreen) moveCursor(delta int) {
 	if b.focus == BrowserFocusChanged {
 		if b.changed != nil {

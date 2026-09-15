@@ -80,7 +80,7 @@ func TestBrowserMouse_ClickDirectoryEntry_EntersIt(t *testing.T) {
 	currentX, _ := root.browser.columnXRanges()
 	require.NotEqual(t, -1, currentX[0])
 
-	updated, cmd := root.Update(leftClick(currentX[0]+1, 2))
+	updated, cmd := root.Update(leftClick(currentX[0]+1, 3)) // row 3: the column's first entry
 	root = updated.(RootModel)
 	require.NotNil(t, cmd, "entering a directory issues a load command")
 	for _, msg := range drainBatch(cmd) {
@@ -129,8 +129,8 @@ func TestBrowserMouse_ClickChangedEntry_MovesFocusAndEnterActsOnIt(t *testing.T)
 	_, changedX := root.browser.columnXRanges()
 	require.NotEqual(t, -1, changedX[0])
 
-	// row 3 (y) is the second entry row -> "b.txt" (files sorted a.txt, b.txt)
-	updated, _ := root.Update(leftClick(changedX[0]+1, 3))
+	// row 4 (y) is the second entry row -> "b.txt" (files sorted a.txt, b.txt)
+	updated, _ := root.Update(leftClick(changedX[0]+1, 4))
 	root = updated.(RootModel)
 	require.Equal(t, BrowserFocusChanged, root.browser.focus, "click in the changed pane must move focus there")
 
@@ -152,8 +152,9 @@ func TestBrowserMouse_ClickChangedScopeLabel_TogglesScope(t *testing.T) {
 	_, changedX := root.browser.columnXRanges()
 	require.NotEqual(t, -1, changedX[0])
 
-	// row 1 is the header row ("changed - <scope>")
-	updated, _ := root.Update(leftClick(changedX[0]+1, 1))
+	// row 0 is the path header and row 1 each box's top border, so the
+	// changed pane's own header row ("changed - <scope>") sits at row 2
+	updated, _ := root.Update(leftClick(changedX[0]+1, 2))
 	root = updated.(RootModel)
 
 	assert.Equal(t, BrowserFocusChanged, root.browser.focus, "clicking the header must also focus the changed pane")
@@ -173,7 +174,7 @@ func TestBrowserMouse_KeyboardToggleScope_SameEffectAsClick(t *testing.T) {
 	viaKey = updated.(RootModel)
 
 	_, changedX := viaClick.browser.columnXRanges()
-	updated, _ = viaClick.Update(leftClick(changedX[0]+1, 1))
+	updated, _ = viaClick.Update(leftClick(changedX[0]+1, 2)) // row 2: the changed pane's header
 	viaClick = updated.(RootModel)
 
 	assert.Equal(t, viaKey.browser.changed.scope, viaClick.browser.changed.scope)

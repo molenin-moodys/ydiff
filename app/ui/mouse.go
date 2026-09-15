@@ -518,7 +518,7 @@ const (
 // column box: total height minus the status bar row and the box's own
 // top/bottom border rows. Mirrors RenderBrowserView's `ph` exactly.
 func (b browserScreen) paneContentHeight() int {
-	return max(b.height-3, 1)
+	return max(b.height-browserChromeRows, 1)
 }
 
 // columnXRanges returns the [start, end) screen-column ranges the current
@@ -567,9 +567,11 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 	if b.width <= 0 || b.height <= 0 || x < 0 || y < 0 || x >= b.width || y >= b.height {
 		return browserHitNone, -1
 	}
+	// Row 0 is the path header and row 1 each box's top border, so a
+	// column's own header sits at row 2 and its content runs from row 3.
 	ph := b.paneContentHeight()
-	if y == 0 || y > ph {
-		return browserHitNone, -1 // top border, or bottom border/status bar and beyond
+	if y <= 1 || y > ph+1 {
+		return browserHitNone, -1 // path header, top border, or bottom border/status bar and beyond
 	}
 
 	currentX, changedX := b.columnXRanges()
@@ -577,15 +579,15 @@ func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
 
 	switch {
 	case inRange(currentX):
-		if y == 1 {
+		if y == 2 {
 			return browserHitNone, -1 // header row: directory name, not clickable
 		}
-		return browserHitCurrent, y - 2
+		return browserHitCurrent, y - 3
 	case inRange(changedX):
-		if y == 1 {
+		if y == 2 {
 			return browserHitChangedHeader, -1
 		}
-		return browserHitChanged, y - 2
+		return browserHitChanged, y - 3
 	default:
 		return browserHitNone, -1 // parent column (no cursor of its own) or a gap
 	}
@@ -732,6 +734,10 @@ type browserHelpEntry struct {
 var browserHelpEntries = []browserHelpEntry{
 	{keymap.ActionBrowserUp, "move cursor"},
 	{keymap.ActionBrowserDown, "move cursor"},
+	{keymap.ActionBrowserPageUp, "move cursor one page up"},
+	{keymap.ActionBrowserPageDown, "move cursor one page down"},
+	{keymap.ActionBrowserHome, "jump to the first entry"},
+	{keymap.ActionBrowserEnd, "jump to the last entry"},
 	{keymap.ActionBrowserEnter, "enter directory / open diff / apply filter"},
 	{keymap.ActionBrowserUpLevel, "up one level"},
 	{keymap.ActionBrowserFilter, "start filter"},

@@ -1203,6 +1203,8 @@ func TestDefaultBrowser_allExpectedBindings(t *testing.T) {
 		action Action
 	}{
 		{"up", ActionBrowserUp}, {"down", ActionBrowserDown},
+		{"pgup", ActionBrowserPageUp}, {"pgdown", ActionBrowserPageDown},
+		{"home", ActionBrowserHome}, {"end", ActionBrowserEnd},
 		{"right", ActionBrowserEnter}, {"enter", ActionBrowserEnter},
 		{"left", ActionBrowserUpLevel},
 		{"/", ActionBrowserFilter},

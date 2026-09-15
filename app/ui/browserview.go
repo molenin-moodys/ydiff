@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,6 +22,12 @@ const (
 	wideTierWidth   = 100
 	mediumTierWidth = 60
 )
+
+// browserChromeRows is how many rows RenderBrowserView spends on something
+// other than a column's content: the path header at the top, each column
+// box's own top and bottom border, and the status bar. Pane height and the
+// mouse hit-test row math both derive from it, so they cannot drift apart.
+const browserChromeRows = 4
 
 // BrowserFocus identifies which pane holds keyboard focus in the browser
 // screen. It decides which column's frame renders with the active border
@@ -66,9 +73,7 @@ type BrowserViewParams struct {
 // current directory, and the changed-files pane, followed by a status bar.
 // Column count adapts to Width per the narrow-terminal tiers above.
 func RenderBrowserView(p BrowserViewParams) string {
-	// -3: one row for the status bar, two for each column box's own
-	// top/bottom border (lipgloss.Style.Height sets inner content height).
-	ph := max(p.Height-3, 1)
+	ph := max(p.Height-browserChromeRows, 1)
 
 	var panes string
 	switch {
@@ -82,7 +87,54 @@ func RenderBrowserView(p BrowserViewParams) string {
 
 	statusW := max(p.Width, 0)
 	status := p.Resolver.Style(style.StyleKeyStatusBar).Width(statusW).Render(p.statusBarText())
-	return lipgloss.JoinVertical(lipgloss.Left, panes, status)
+	return lipgloss.JoinVertical(lipgloss.Left, p.renderPathHeader(), panes, status)
+}
+
+// renderPathHeader renders the current directory path as the view's top row,
+// with the leading directories muted and the directory you are standing in
+// picked out — so the eye lands on where it is, with the route there still
+// readable. The home directory is abbreviated to "~", and an over-long path
+// is truncated from the left, keeping the end (the part that identifies the
+// directory) rather than the root.
+func (p BrowserViewParams) renderPathHeader() string {
+	path := abbreviateHome(p.Nav.Path())
+	width := max(p.Width, 0)
+
+	parent, current := filepath.Dir(path), filepath.Base(path)
+	if parent == "." || current == "" || parent == path {
+		// a root-like path ("/", "~") has no parent segment to mute
+		return p.Resolver.Style(style.StyleKeyFileSelected).Width(width).
+			Render(truncateLeftToWidth(sanitizeFilenameForDisplay(path), width))
+	}
+	if !strings.HasSuffix(parent, string(filepath.Separator)) {
+		parent += string(filepath.Separator)
+	}
+
+	lead := p.Resolver.Style(style.StyleKeyStatusDefault).Render(sanitizeFilenameForDisplay(parent))
+	tail := p.Resolver.Style(style.StyleKeyDirEntry).Render(sanitizeFilenameForDisplay(current))
+	header := lead + tail
+	if lipgloss.Width(header) > width {
+		// styling survives truncation poorly, so fall back to one style
+		return p.Resolver.Style(style.StyleKeyDirEntry).Width(width).
+			Render(truncateLeftToWidth(sanitizeFilenameForDisplay(path), width))
+	}
+	return lipgloss.NewStyle().Width(width).Render(header)
+}
+
+// abbreviateHome rewrites a leading home directory as "~", the way yazi and
+// most shells display it, so the header stays short and scannable.
+func abbreviateHome(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == string(filepath.Separator) {
+		return path
+	}
+	if path == home {
+		return "~"
+	}
+	if rest, ok := strings.CutPrefix(path, home+string(filepath.Separator)); ok {
+		return "~" + string(filepath.Separator) + rest
+	}
+	return path
 }
 
 func (p BrowserViewParams) renderThreeColumns(ph int) string {

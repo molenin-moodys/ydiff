@@ -77,6 +77,7 @@ type options struct {
 	BaseBranchRepos map[string]string `long:"base-branch-repo" ini-name:"base-branch-repo" description:"per-repository base branch override: repo-root-path:branch (repeatable)"`
 	Browser         bool              `long:"browser" ini-name:"browser" env:"YDIFF_BROWSER" description:"force the browser screen even when diff arguments are present"`
 	BrowserWidths   string            `long:"browser-widths" ini-name:"browser-widths" env:"YDIFF_BROWSER_WIDTHS" default:"15,35,50" description:"parent,current,changed column proportions for the browser screen (normalised, need not sum to 100)"`
+	CwdFile         string            `long:"cwd-file" ini-name:"cwd-file" env:"YDIFF_CWD_FILE" description:"write the browser's last directory to this file on exit, for a shell wrapper to cd into"`
 
 	Colors struct {
 		Accent       string `long:"color-accent"      ini-name:"color-accent"      env:"YDIFF_COLOR_ACCENT"      default:"#D5895F" description:"active pane borders and directory names"`

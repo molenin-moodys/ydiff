@@ -73,9 +73,11 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | Key | Action |
 |---|---|
 | Up / Down (arrows) | move the cursor |
+| PgUp / PgDn | move the cursor one visible page |
+| Home / End | jump to the first or last entry |
 | Right / Enter | enter directory (current-directory column) |
 | Enter *(on a changed file)* | open that file's diff in the review screen |
-| Left | go up one level |
+| Left | go up one level, or return focus to the columns when the changed-files pane is focused |
 | `/` | start filter; typing narrows the list live; `Enter` applies (filter stays active); `Esc` cancels and clears it |
 | `d` | open the review screen on the whole changeset |
 | `t` | toggle `uncommitted` / `branch` scope |
@@ -85,6 +87,28 @@ No vim movement aliases here: arrows move the cursor, letters are commands.
 | `q` | quit |
 | `?` | help |
 | mouse | click to select or enter, wheel to scroll; the scope label in the changed-files header is clickable |
+
+### Changing directory on exit
+
+ydiff itself cannot change its parent shell's directory — no process can. Like yazi, it
+writes where you ended up to a file and leaves the `cd` to a shell wrapper. Add this to
+your shell config and use `yd` instead of `ydiff`:
+
+```sh
+yd() {
+    local tmp
+    tmp="$(mktemp -t ydiff-cwd.XXXXXX)"
+    ydiff --cwd-file="$tmp" "$@"
+    local dir
+    dir="$(cat -- "$tmp" 2>/dev/null)"
+    rm -f -- "$tmp"
+    [ -n "$dir" ] && [ "$dir" != "$PWD" ] && cd -- "$dir"
+}
+```
+
+The file is written whether or not you left any annotations, and only for invocations
+that actually had a browser — running straight into the review screen leaves it empty, so
+the wrapper stays where it was.
 
 ### Narrow-terminal rules
 
@@ -183,6 +207,7 @@ translation behind the positional refs (this fork is git-only).
 | `--base-branch` | override for `branch`-scope base resolution (e.g. `origin/main`); wins over auto-detection and over any `--base-branch-repo` entry |
 | `--base-branch-repo` | per-repository override, `repo-root-path:branch` (repeatable; config-file or CLI-map only, no env var); consulted only when `--base-branch` is empty |
 | `--browser` | force the browser screen even when diff arguments are present |
+| `--cwd-file` | write the browser's last directory to this file on exit, for a shell wrapper to `cd` into (see [Changing directory on exit](#changing-directory-on-exit)) |
 | `--browser-widths` | the parent,current,changed column proportions for the browser, default `15,35,50` (normalized, need not sum to 100); at the medium tier the current/changed proportions carry over to the two remaining columns |
 
 `--base-branch` is deliberately not `--base`: the positional arguments are already called

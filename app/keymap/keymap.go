@@ -80,6 +80,10 @@ const (
 	// bindings colliding with the other's.
 	ActionBrowserUp           Action = "browser_up"
 	ActionBrowserDown         Action = "browser_down"
+	ActionBrowserPageUp       Action = "browser_page_up"
+	ActionBrowserPageDown     Action = "browser_page_down"
+	ActionBrowserHome         Action = "browser_home"
+	ActionBrowserEnd          Action = "browser_end"
 	ActionBrowserEnter        Action = "browser_enter" // enter directory / open diff / apply filter
 	ActionBrowserUpLevel      Action = "browser_up_level"
 	ActionBrowserFilter       Action = "browser_filter"
@@ -124,6 +128,8 @@ var validActions = map[Action]bool{
 // correct binding namespace (browserBindings vs bindings).
 var validBrowserActions = map[Action]bool{
 	ActionBrowserUp: true, ActionBrowserDown: true, ActionBrowserEnter: true,
+	ActionBrowserPageUp: true, ActionBrowserPageDown: true,
+	ActionBrowserHome: true, ActionBrowserEnd: true,
 	ActionBrowserUpLevel: true, ActionBrowserFilter: true, ActionBrowserDismiss: true,
 	ActionBrowserReview: true, ActionBrowserToggleScope: true, ActionBrowserRefresh: true,
 	ActionBrowserToggleHidden: true, ActionBrowserFocusPane: true,
@@ -354,8 +360,12 @@ func defaultBindings() map[string]Action {
 // design doc's "Key bindings" table for the browser.
 func defaultBrowserBindings() map[string]Action {
 	return map[string]Action{
-		"up":    ActionBrowserUp,
-		"down":  ActionBrowserDown,
+		"up":     ActionBrowserUp,
+		"down":   ActionBrowserDown,
+		"pgup":   ActionBrowserPageUp,
+		"pgdown": ActionBrowserPageDown,
+		"home":   ActionBrowserHome,
+		"end":    ActionBrowserEnd,
 		"right": ActionBrowserEnter,
 		"enter": ActionBrowserEnter,
 		"left":  ActionBrowserUpLevel,

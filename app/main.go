@@ -319,6 +319,12 @@ func run(opts options) (int, error) {
 	if !ok {
 		return 0, nil
 	}
+
+	// Before any annotation early-return: the shell wrapper waiting on
+	// --cwd-file must learn where the user ended up whether or not they
+	// left a comment, so this cannot sit below the "no annotations" exits.
+	writeCwdFile(opts, root)
+
 	if root.Discarded() {
 		return 0, nil
 	}
@@ -595,4 +601,20 @@ func compactApplicable(opts options, r ui.Renderer) bool {
 		return false
 	}
 	return true
+}
+
+// writeCwdFile records the browser's final directory in opts.CwdFile so a
+// shell wrapper can cd there after ydiff exits — the mechanism yazi uses for
+// its `y` function. A failure here is deliberately silent: the user's review
+// session succeeded, and killing the exit path over an unwritable scratch
+// file would lose their annotations for a convenience feature.
+func writeCwdFile(opts options, root ui.RootModel) {
+	if opts.CwdFile == "" {
+		return
+	}
+	path, ok := root.BrowserPath()
+	if !ok {
+		return // no browser in this invocation: nothing meaningful to record
+	}
+	_ = os.WriteFile(opts.CwdFile, []byte(path), 0o600)
 }
