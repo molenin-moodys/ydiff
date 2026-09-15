@@ -464,15 +464,15 @@ reworking it to issue commands afterwards.*
 **Files:**
 - Create: `app/browser/filter.go`, `app/browser/filter_test.go`
 
-- [ ] write tests first: case-insensitive substring matching, with the matched rune range
+- [x] write tests first: case-insensitive substring matching, with the matched rune range
       reported so the view can highlight it
-- [ ] write the reset test: any directory change, in either direction, drops the filter
-- [ ] write tests for the filter lifecycle — start, append, backspace, apply-and-keep,
+- [x] write the reset test: any directory change, in either direction, drops the filter
+- [x] write tests for the filter lifecycle — start, append, backspace, apply-and-keep,
       cancel-and-clear — and for a filter matching nothing leaving an empty but valid listing
-- [ ] implement the filter as browser state, applied only to the middle column
-- [ ] write a test asserting the cursor lands on a valid index after the filter narrows the
+- [x] implement the filter as browser state, applied only to the middle column
+- [x] write a test asserting the cursor lands on a valid index after the filter narrows the
       list beneath it
-- [ ] run `go test -race ./app/browser/...` — **phase 3 complete**
+- [x] run `go test -race ./app/browser/...` — **phase 3 complete**
 
 ### Task 16: Register browser actions in the keymap
 
