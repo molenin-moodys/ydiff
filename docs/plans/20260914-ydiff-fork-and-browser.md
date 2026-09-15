@@ -376,13 +376,13 @@ default theme `revdiff` -> `ydiff`.
 **Files:**
 - Create: `app/gitstate/base.go`, `app/gitstate/base_test.go`
 
-- [ ] write tests first for the full chain: explicit override wins, then
+- [x] write tests first for the full chain: explicit override wins, then
       `git rev-parse --abbrev-ref origin/HEAD`, then `origin/main`, then `origin/master`
-- [ ] write the test that matters most: when none resolve, return a distinguishable
+- [x] write the test that matters most: when none resolve, return a distinguishable
       "base not found" error and **never** fall back to a guess
-- [ ] implement `ResolveBase(repo *Repo, override string) (string, error)`
-- [ ] write a test for a repository with no remote at all
-- [ ] run `go test -race ./app/gitstate/...` — must pass before task 10
+- [x] implement `ResolveBase(repo *Repo, override string) (string, error)`
+- [x] write a test for a repository with no remote at all
+- [x] run `go test -race ./app/gitstate/...` — must pass before task 10
 
 ### Task 10: gitstate — branch scope
 
