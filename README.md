@@ -127,9 +127,14 @@ current/changed proportions are reused for the remaining two columns (see
 
 Drag the border between two visible columns with the mouse to resize them; a small
 minimum width keeps a column from being dragged down to nothing. The result is written
-back to `~/.config/ydiff/config` as `browser-widths`, so it survives a restart — an
-explicit `--browser-widths` on the command line still overrides it, as with any other
-config-file value.
+back to the resolved config file (`~/.config/ydiff/config` by default, or the path from
+`--config`/`YDIFF_CONFIG`) as `browser-widths`, so it survives a restart — an explicit
+`--browser-widths` on the command line still overrides it, as with any other config-file
+value. Because a config-file value wins over the same-named env var in this fork (see
+[Flags](#flags)), once a drag has written `browser-widths` it also takes precedence over
+`YDIFF_BROWSER_WIDTHS`; remove the `browser-widths` line from the config to restore the
+env var. If no config path is resolved (e.g. `--config` points nowhere writable), dragging
+still resizes the columns for the rest of the session, just without persisting.
 
 ## The review screen
 

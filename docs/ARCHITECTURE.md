@@ -217,7 +217,7 @@ Consumed by `app/ui` via the `ExternalEditor` interface (defined in `app/ui/edit
 
 ## Key Interfaces
 
-All consumer-side — defined in `app/ui/model.go`, not in implementor packages (exception: `diff.Renderer` is a local mirror exported for moq generation). This is idiomatic Go: interfaces belong to the consumer.
+All consumer-side, per this project's architecture principle — mostly defined in `app/ui/model.go`, though not exclusively (e.g. `BrowserWidthsPersister` lives in `app/ui/root.go`, closer to its one caller); none are defined in implementor packages (exception: `diff.Renderer` is a local mirror exported for moq generation). This is idiomatic Go: interfaces belong to the consumer.
 
 | Interface | Methods | Implementors |
 |-----------|---------|-------------|
@@ -234,6 +234,7 @@ All consumer-side — defined in `app/ui/model.go`, not in implementor packages 
 | `overlayManager` | `Active()`, `Kind()`, `OpenHelp()`, `OpenAnnotList()`, `OpenThemeSelect()`, `OpenInfo()`, `UpdateInfo()`, `Close()`, `HandleKey()`, `HandleMouse()`, `Compose()` | `overlay.Manager` |
 | `ThemeCatalog` | `Entries()`, `Resolve()`, `Persist()` | `themeCatalog` adapter in `app/themes.go` (composes `theme.Catalog` + config persistence) |
 | `ExternalEditor` | `Command(content)` for annotation temp-file editing, `SourceCommand(path string, line int)` for opening source files | `editor.Editor` (default wiring via `ModelConfig.Editor`; stubbed in tests) |
+| `BrowserWidthsPersister` | `PersistBrowserWidths(widths [3]int)` | `*configStore` in `app/configstore.go` (injected via `RootModel.WithBrowserWidthsPersister`; nil is a no-op) |
 
 ## Data Flow
 
@@ -398,6 +399,8 @@ Theme precedence: `--theme` overwrites all 23 color fields + chroma-style, ignor
 Adding a new color requires changes in three places: `theme.go` colorKeys + options struct + `colorFieldPtrs()` in `app/themes.go`.
 
 Theme ownership is split by concern: `app/theme` owns discovery/loading/installation via `Catalog`, `app/ui` consumes a `ThemeCatalog` interface for selector/preview/apply, and `app/themes.go` wires a thin adapter composing `theme.Catalog` + config file persistence.
+
+The browser's dragged column widths persist the same way: `patchConfigKey` in `app/themes.go` is a key-agnostic single-key INI writer, shared by the theme persister (`patchConfigTheme`) and the browser-widths persister (`app/configstore.go`'s `configStore.PersistBrowserWidths`, wired via the `ui.BrowserWidthsPersister` interface).
 
 ## Input Modes
 

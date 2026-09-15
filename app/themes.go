@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/muesli/termenv"
 
@@ -277,7 +278,23 @@ func (tc *themeCatalog) patchConfigTheme(themeName string) error {
 // replaced in place; otherwise a fresh "key = ..." is inserted just before the
 // first non-[Application Options] section header so the INI parser attributes
 // it to the default scope.
+// patchConfigKeyMu serializes every patchConfigKey call across the process.
+// Two persisters write the same config file concurrently on their own
+// goroutines (the theme persister and, since the browser-widths feature,
+// browserScreen.persistWidthsCmd's tea.Cmd) — without a lock, two
+// back-to-back writes can interleave as read-then-write on both goroutines,
+// so whichever write's os.ReadFile ran last silently loses whatever the
+// other one had just written (AtomicWriteFile keeps the file from
+// corrupting, but does not order the two logical read-modify-write
+// operations against each other). This mutex only orders the callers within
+// this process; it does not protect against another process editing the
+// same file concurrently.
+var patchConfigKeyMu sync.Mutex
+
 func patchConfigKey(path, key, value string) error {
+	patchConfigKeyMu.Lock()
+	defer patchConfigKeyMu.Unlock()
+
 	if strings.ContainsAny(value, "\r\n") {
 		return fmt.Errorf("invalid %s value %q: must not contain newlines", key, value)
 	}
