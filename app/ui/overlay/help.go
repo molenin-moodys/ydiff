@@ -115,8 +115,17 @@ func (h *helpOverlay) render(ctx RenderCtx, _ *Manager) string {
 	return boxStyle.Render(buf.String())
 }
 
+// handleKey closes the overlay on the review screen's help/dismiss actions
+// or the browser screen's equivalents (ActionBrowserHelp, ActionBrowserDismiss
+// — a separate binding namespace, see keymap.ResolveBrowser), or on a raw Esc
+// keypress regardless of which namespace resolved it. Every other key is
+// swallowed without effect: the help overlay has nothing else to do with it.
 func (h *helpOverlay) handleKey(msg tea.KeyMsg, action keymap.Action) Outcome {
-	if action == keymap.ActionHelp || action == keymap.ActionDismiss || msg.Type == tea.KeyEsc {
+	switch action {
+	case keymap.ActionHelp, keymap.ActionDismiss, keymap.ActionBrowserHelp, keymap.ActionBrowserDismiss:
+		return Outcome{Kind: OutcomeClosed}
+	}
+	if msg.Type == tea.KeyEsc {
 		return Outcome{Kind: OutcomeClosed}
 	}
 	return Outcome{Kind: OutcomeNone}

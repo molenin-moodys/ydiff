@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/molenin-moodys/ydiff/app/keymap"
 	"github.com/molenin-moodys/ydiff/app/ui/overlay"
 	"github.com/molenin-moodys/ydiff/app/ui/sidepane"
 )
@@ -482,4 +484,297 @@ func (m Model) clickDiff(y int) (tea.Model, tea.Cmd) {
 	m.syncViewportToCursor()
 	m.syncTOCActiveSection()
 	return m, nil
+}
+
+// --- Browser screen mouse support (task 21) -------------------------------
+//
+// The browser screen has its own hit-testing rather than sharing hitTest
+// above: it has no diff viewport and a different column layout (Miller
+// columns whose count and x-offsets depend on the narrow-terminal tier from
+// browserview.go), but the same top-level gating applies — mouse messages
+// only ever reach here when tea.WithMouseCellMotion is enabled, i.e.
+// --no-mouse is off (see app/main.go), exactly as for the review screen.
+// There is no separate browser-only mouse flag.
+//
+// Unlike the review screen's wheel (which follows the pointer, matching
+// terminal convention), the browser's wheel scrolls whichever pane
+// currently holds focus. With only two focusable panes and Tab already the
+// established way to move between them, introducing a second,
+// pointer-based notion of "the active pane" for wheel alone would fight the
+// keyboard model instead of complementing it — especially below
+// mediumTierWidth, where only the focused pane is even on screen.
+
+// browserHitZone identifies which browser-screen area a mouse event targets.
+type browserHitZone int
+
+const (
+	browserHitNone          browserHitZone = iota
+	browserHitCurrent                      // the live middle column's entry rows
+	browserHitChangedHeader                // the changed pane's "changed - <scope>" header line
+	browserHitChanged                      // the changed pane's entry rows
+)
+
+// paneContentHeight returns the content-row budget shared by every Miller
+// column box: total height minus the status bar row and the box's own
+// top/bottom border rows. Mirrors RenderBrowserView's `ph` exactly.
+func (b browserScreen) paneContentHeight() int {
+	return max(b.height-3, 1)
+}
+
+// columnXRanges returns the [start, end) screen-column ranges the current
+// and changed-files columns occupy, mirroring browserview.go's
+// renderThreeColumns/renderTwoColumns/renderSingleColumn tiering and
+// distributeWidths math exactly, so a click always lands on the pane it
+// visibly shows. A range of [-1,-1] means that pane is not currently
+// rendered (dropped by the tier, or not the focused pane below
+// mediumTierWidth).
+func (b browserScreen) columnXRanges() (currentX, changedX [2]int) {
+	notRendered := [2]int{-1, -1}
+	widths := defaultBrowserWidths
+
+	switch {
+	case b.width >= wideTierWidth:
+		available := max(b.width-6, 0)
+		w := distributeWidths(available, []int{widths[0], widths[1], widths[2]})
+		parentBoxW := w[0] + 2
+		currentBoxW := w[1] + 2
+		currentX = [2]int{parentBoxW, parentBoxW + currentBoxW}
+		changedX = [2]int{parentBoxW + currentBoxW, b.width}
+		return currentX, changedX
+	case b.width >= mediumTierWidth:
+		available := max(b.width-4, 0)
+		w := distributeWidths(available, []int{widths[1], widths[2]})
+		currentBoxW := w[0] + 2
+		currentX = [2]int{0, currentBoxW}
+		changedX = [2]int{currentBoxW, b.width}
+		return currentX, changedX
+	default:
+		if b.focus == BrowserFocusChanged {
+			return notRendered, [2]int{0, b.width}
+		}
+		return [2]int{0, b.width}, notRendered
+	}
+}
+
+// hitTest classifies a browser-screen screen coordinate into a
+// browserHitZone plus the entry row within that pane (0-based, before
+// scroll-offset translation; -1 when the zone has no per-row meaning, e.g.
+// a column header). Row 0 of every column box is its top border, row 1 is
+// always the header line (directory name, or "changed - <scope>" for the
+// changed pane), and entry rows start at row 2 — mirroring diffTopRow's
+// border+header accounting in the review screen's own hitTest.
+func (b browserScreen) hitTest(x, y int) (zone browserHitZone, row int) {
+	if b.width <= 0 || b.height <= 0 || x < 0 || y < 0 || x >= b.width || y >= b.height {
+		return browserHitNone, -1
+	}
+	ph := b.paneContentHeight()
+	if y == 0 || y > ph {
+		return browserHitNone, -1 // top border, or bottom border/status bar and beyond
+	}
+
+	currentX, changedX := b.columnXRanges()
+	inRange := func(r [2]int) bool { return r[0] >= 0 && x >= r[0] && x < r[1] }
+
+	switch {
+	case inRange(currentX):
+		if y == 1 {
+			return browserHitNone, -1 // header row: directory name, not clickable
+		}
+		return browserHitCurrent, y - 2
+	case inRange(changedX):
+		if y == 1 {
+			return browserHitChangedHeader, -1
+		}
+		return browserHitChanged, y - 2
+	default:
+		return browserHitNone, -1 // parent column (no cursor of its own) or a gap
+	}
+}
+
+// handleBrowserMouse routes a tea.MouseMsg to the browser screen: overlay
+// dispatch takes priority (mirrors Model.handleOverlayMouse), then wheel and
+// left-click are handled; every other button is a no-op, matching the
+// review screen's handleMouse.
+func (b browserScreen) handleBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if b.overlay != nil && b.overlay.Active() {
+		return b.handleBrowserOverlayMouse(msg)
+	}
+
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		if msg.Action != tea.MouseActionPress {
+			return b, nil
+		}
+		return b.handleBrowserWheel(-1)
+	case tea.MouseButtonWheelDown:
+		if msg.Action != tea.MouseActionPress {
+			return b, nil
+		}
+		return b.handleBrowserWheel(1)
+	case tea.MouseButtonLeft:
+		if msg.Action != tea.MouseActionPress {
+			return b, nil
+		}
+		return b.clickBrowser(msg.X, msg.Y)
+	default:
+		return b, nil
+	}
+}
+
+// handleBrowserOverlayMouse routes a mouse event to the browser's active
+// overlay (currently only the help overlay, which has no scrollable state
+// and simply swallows the event) so it never leaks through to the panes
+// underneath.
+func (b browserScreen) handleBrowserOverlayMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	b.overlay.HandleMouse(msg)
+	return b, nil
+}
+
+// handleBrowserWheel scrolls whichever pane currently holds focus by one
+// entry per notch, delta > 0 for wheel-down, delta < 0 for wheel-up — see
+// the package doc comment above for why focus, not pointer position,
+// decides the target pane here.
+func (b browserScreen) handleBrowserWheel(delta int) (tea.Model, tea.Cmd) {
+	if b.focus == BrowserFocusChanged {
+		if b.changed != nil {
+			b.changed.MoveCursor(delta)
+		}
+		return b, nil
+	}
+	b.nav.MoveCursor(delta)
+	return b, nil
+}
+
+// clickBrowser dispatches a left-click press at (x, y) to whichever
+// browser-screen zone it hit.
+func (b browserScreen) clickBrowser(x, y int) (tea.Model, tea.Cmd) {
+	zone, row := b.hitTest(x, y)
+	switch zone {
+	case browserHitCurrent:
+		return b.clickCurrentEntry(row)
+	case browserHitChangedHeader:
+		return b.clickChangedScopeLabel()
+	case browserHitChanged:
+		return b.clickChangedEntry(row)
+	default:
+		return b, nil
+	}
+}
+
+// clickCurrentEntry handles a left-click on the middle column's entry rows.
+// row is translated to an absolute index into VisibleEntries via the same
+// scroll-window math renderCurrentColumn used to decide what row is even
+// visible there. The click always focuses the current column and moves its
+// cursor to the entry (this is the "click selects an entry" behavior); when
+// the entry is a directory, Nav.Enter is a no-op for anything else it is
+// called on unconditionally — the design's "click on a directory enters it"
+// falls out of that for free, exactly like pressing Enter would.
+func (b browserScreen) clickCurrentEntry(row int) (tea.Model, tea.Cmd) {
+	entries := b.nav.VisibleEntries()
+	body := max(b.paneContentHeight()-1, 0)
+	offset, _ := paneScrollWindow(len(entries), body, b.nav.Cursor())
+	idx := offset + row
+	if idx < 0 || idx >= len(entries) {
+		return b, nil
+	}
+	b.focus = BrowserFocusCurrent
+	b.nav.SetCursor(idx)
+	return b, b.navChanged(b.nav.Enter())
+}
+
+// clickChangedEntry handles a left-click on the changed-files pane's entry
+// rows: it focuses the changed pane and moves its cursor to the clicked
+// entry, so a following Enter (browser_enter) opens review scoped to it —
+// the same focus/Enter symmetry Tab plus keyboard Enter already give the
+// two panes. Direct field access is safe here: changedPane is defined in
+// this same package (changedpane.go).
+func (b browserScreen) clickChangedEntry(row int) (tea.Model, tea.Cmd) {
+	if b.changed == nil {
+		return b, nil
+	}
+	body := max(b.paneContentHeight()-1, 0)
+	offset, _ := paneScrollWindow(len(b.changed.files), body, b.changed.cursor)
+	idx := offset + row
+	if idx < 0 || idx >= len(b.changed.files) {
+		return b, nil
+	}
+	b.focus = BrowserFocusChanged
+	b.changed.cursor = idx
+	return b, nil
+}
+
+// clickChangedScopeLabel handles a left-click on the changed pane's header
+// ("changed - uncommitted" / "changed - branch"): it focuses the changed
+// pane and toggles the scope through changedPane.ToggleScope, the exact
+// same method ActionBrowserToggleScope (`t`) calls — same cache
+// invalidation, no parallel implementation.
+func (b browserScreen) clickChangedScopeLabel() (tea.Model, tea.Cmd) {
+	if b.changed == nil {
+		return b, nil
+	}
+	b.focus = BrowserFocusChanged
+	return b, b.changed.ToggleScope(b.nav.Path())
+}
+
+// browserHelpEntry pairs a browser action with its help description. Kept
+// in the ui package (rather than added to keymap.defaultDescriptions)
+// because browser actions live in their own binding namespace
+// (Keymap.browserBindings) that keymap.HelpSections() does not walk —
+// see ResolveBrowser's doc comment in app/keymap/keymap.go.
+type browserHelpEntry struct {
+	action keymap.Action
+	desc   string
+}
+
+// browserHelpEntries is the ordered list backing the browser screen's help
+// overlay "Browser" section — one entry per browser action, in the same
+// order as the design's key-bindings table.
+var browserHelpEntries = []browserHelpEntry{
+	{keymap.ActionBrowserUp, "move cursor"},
+	{keymap.ActionBrowserDown, "move cursor"},
+	{keymap.ActionBrowserEnter, "enter directory / open diff / apply filter"},
+	{keymap.ActionBrowserUpLevel, "up one level"},
+	{keymap.ActionBrowserFilter, "start filter"},
+	{keymap.ActionBrowserDismiss, "cancel filter / close overlay; never quits"},
+	{keymap.ActionBrowserReview, "review screen on the whole changeset"},
+	{keymap.ActionBrowserToggleScope, "toggle uncommitted / branch scope"},
+	{keymap.ActionBrowserRefresh, "refresh changed-files list"},
+	{keymap.ActionBrowserToggleHidden, "toggle hidden files"},
+	{keymap.ActionBrowserFocusPane, "focus between panes"},
+	{keymap.ActionBrowserQuit, "quit"},
+	{keymap.ActionBrowserHelp, "show help"},
+}
+
+// browserMouseHelpEntries is the browser help overlay's "Mouse" section —
+// informational rows with no key binding behind them, discoverable the same
+// way the review screen's own "mouse" row is (see the design's Browser key
+// bindings table).
+var browserMouseHelpEntries = []overlay.HelpEntry{
+	{Keys: "Click", Description: "select entry / enter directory / move focus to that pane"},
+	{Keys: "Click (changed header)", Description: "toggle uncommitted / branch scope"},
+	{Keys: "Wheel", Description: "scroll the focused pane"},
+}
+
+// buildBrowserHelpSpec builds the browser screen's help overlay content: a
+// "Browser" section listing every bound browser action (an action with no
+// key currently bound to it, e.g. after a user `unmap`, is omitted, mirroring
+// Model.buildHelpSpec's own HelpSections behavior), followed by the "Mouse"
+// section every browser binding lacks a key for.
+func (b browserScreen) buildBrowserHelpSpec() overlay.HelpSpec {
+	var entries []overlay.HelpEntry
+	for _, e := range browserHelpEntries {
+		keys := b.km.KeysForBrowser(e.action)
+		if len(keys) == 0 {
+			continue
+		}
+		entries = append(entries, overlay.HelpEntry{
+			Keys:        strings.Join(keys, " / "),
+			Description: e.desc,
+		})
+	}
+
+	return overlay.HelpSpec{Sections: []overlay.HelpSection{
+		{Title: "Browser", Entries: entries},
+		{Title: "Mouse", Entries: browserMouseHelpEntries},
+	}}
 }

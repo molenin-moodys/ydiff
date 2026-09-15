@@ -574,13 +574,13 @@ not depend on flag parsing existing yet.*
 - Create: `app/ui/browsermouse_test.go`
 - Modify: `app/ui/overlay/help.go`
 
-- [ ] write tests first: click selects an entry, click on a directory enters it, wheel
+- [x] write tests first: click selects an entry, click on a directory enters it, wheel
       scrolls the focused pane, a click in the changed pane moves focus there
-- [ ] implement the clickable scope label in the changed pane header, toggling
+- [x] implement the clickable scope label in the changed pane header, toggling
       `uncommitted` / `branch` exactly as `t` does
-- [ ] verify `--no-mouse` disables browser mouse handling as it does in review
-- [ ] extend the help overlay with the browser bindings and the mouse row
-- [ ] run `go test -race ./...` — **phase 4 complete**: browser and review work as one application
+- [x] verify `--no-mouse` disables browser mouse handling as it does in review
+- [x] extend the help overlay with the browser bindings and the mouse row
+- [x] run `go test -race ./...` — **phase 4 complete**: browser and review work as one application
 
 ### Task 22: New CLI flags
 

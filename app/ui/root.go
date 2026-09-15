@@ -9,6 +9,7 @@ import (
 	"github.com/molenin-moodys/ydiff/app/browser"
 	"github.com/molenin-moodys/ydiff/app/gitstate"
 	"github.com/molenin-moodys/ydiff/app/keymap"
+	"github.com/molenin-moodys/ydiff/app/ui/overlay"
 	"github.com/molenin-moodys/ydiff/app/ui/style"
 )
 
@@ -91,6 +92,7 @@ func NewRootBrowser(
 			km:       km,
 			resolver: resolver,
 			changed:  newChangedPane(gitCache, scope),
+			overlay:  overlay.NewManager(),
 		},
 		review:   review,
 		gitCache: gitCache,
@@ -153,6 +155,16 @@ func (r RootModel) updateBothOnResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd
 // everything else to the browser screen itself.
 func (r RootModel) updateBrowser(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		// while the browser's own help overlay is open, every key belongs
+		// to it (close on ?/Esc, swallow everything else) — never to the
+		// screen-transition shortcuts below, or `q` would quit the process
+		// instead of closing help, and `d`/changed-file Enter would push
+		// review out from under an open overlay.
+		if r.browser.overlay != nil && r.browser.overlay.Active() {
+			bm, cmd := r.browser.Update(msg)
+			r.browser = bm.(browserScreen) //nolint:errcheck // browserScreen.Update always returns a browserScreen
+			return r, cmd
+		}
 		filterActive := r.browser.nav.Filter().Editing()
 		switch r.browser.km.ResolveBrowser(keyMsg.String(), filterActive) {
 		case keymap.ActionBrowserQuit:
@@ -289,6 +301,7 @@ type browserScreen struct {
 	changed  *changedPane
 	focus    BrowserFocus
 	resolver style.Resolver
+	overlay  *overlay.Manager
 
 	width, height int
 }
@@ -323,6 +336,8 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return b, nil
 	case tea.KeyMsg:
 		return b.handleKey(msg)
+	case tea.MouseMsg:
+		return b.handleBrowserMouse(msg)
 	default:
 		return b, nil
 	}
@@ -335,6 +350,9 @@ func (b browserScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // only ever means "enter this directory" or "apply the filter", the cases
 // ReviewTarget declined.
 func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if b.overlay != nil && b.overlay.Active() {
+		return b.handleBrowserOverlayKey(msg)
+	}
 	filterActive := b.nav.Filter().Editing()
 	switch b.km.ResolveBrowser(msg.String(), filterActive) {
 	case keymap.ActionBrowserUp:
@@ -370,11 +388,27 @@ func (b browserScreen) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			b.focus = BrowserFocusCurrent
 		}
+	case keymap.ActionBrowserHelp:
+		if b.overlay != nil {
+			b.overlay.OpenHelp(b.buildBrowserHelpSpec())
+		}
 	default:
 		// browser_review, browser_quit, browser_enter's changed-file case
-		// (all intercepted by RootModel), and hidden-file toggle / help (no
-		// pane implements them yet): no-op here.
+		// (all intercepted by RootModel), and hidden-file toggle (no pane
+		// implements it yet): no-op here.
 	}
+	return b, nil
+}
+
+// handleBrowserOverlayKey delegates a key to the active overlay (help, for
+// now the only browser overlay) instead of ordinary browser navigation,
+// mirroring how the review screen's overlay.Manager intercepts keys ahead of
+// Model.handleKey. RootModel.updateBrowser guards the screen-transition keys
+// the same way before this is ever reached.
+func (b browserScreen) handleBrowserOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	filterActive := b.nav.Filter().Editing()
+	action := b.km.ResolveBrowser(msg.String(), filterActive)
+	b.overlay.HandleKey(msg, action)
 	return b, nil
 }
 
@@ -484,7 +518,7 @@ func (b browserScreen) View() string {
 		branch = b.changed.branch
 	}
 
-	return RenderBrowserView(BrowserViewParams{
+	out := RenderBrowserView(BrowserViewParams{
 		Nav:            b.nav,
 		Widths:         defaultBrowserWidths,
 		Width:          b.width,
@@ -496,4 +530,8 @@ func (b browserScreen) View() string {
 		ScopeLabel:     scopeLabel,
 		Branch:         branch,
 	})
+	if b.overlay != nil {
+		out = b.overlay.Compose(out, overlay.RenderCtx{Width: b.width, Height: b.height, Resolver: b.resolver})
+	}
+	return out
 }
