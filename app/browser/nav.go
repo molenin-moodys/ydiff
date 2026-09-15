@@ -306,3 +306,35 @@ func (n *Nav) Up() tea.Cmd {
 
 	return n.load()
 }
+
+// GoTo navigates directly to path, an arbitrary absolute directory path that
+// need not be a child or parent of the current one — used by the favorites
+// popup, which can jump anywhere on the filesystem. path is cleaned but
+// otherwise used as-is (the caller is trusted to pass a directory, not a
+// file). A jump to the current path is a no-op. The filter is dropped and
+// the per-path cursor memory is consulted exactly as Up already does,
+// falling back to 0 for a path visited for the first time this session.
+func (n *Nav) GoTo(path string) tea.Cmd {
+	path = filepath.Clean(path)
+	if path == n.path {
+		return nil
+	}
+
+	// record where the cursor was in the directory being left, exactly as
+	// Enter does, so a later GoTo back to it restores the position (the
+	// cursor is an index into the filtered VisibleEntries, so it is
+	// converted to an index into the raw listing before being remembered).
+	if entries := n.VisibleEntries(); n.cursor >= 0 && n.cursor < len(entries) {
+		n.memory[n.path] = indexByName(n.current.Listing.Entries, entries[n.cursor].Entry.Name)
+	}
+
+	n.path = path
+	n.filter.Reset() // any directory change drops the filter, in either direction
+	if pos, ok := n.memory[path]; ok {
+		n.cursor = pos
+	} else {
+		n.cursor = 0
+	}
+
+	return n.load()
+}

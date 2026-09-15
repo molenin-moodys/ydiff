@@ -95,6 +95,14 @@ const (
 	ActionBrowserFocusPane    Action = "browser_focus_pane"
 	ActionBrowserQuit         Action = "browser_quit"
 	ActionBrowserHelp         Action = "browser_help"
+
+	// ActionBrowserToggleFavorite stars/unstars the current directory.
+	// ActionBrowserFavorites opens the favorites popup; inside it, Up/Down
+	// (this same namespace), Enter (jump), Delete (remove) and Dismiss/Esc
+	// (close) are handled directly by the overlay — see
+	// app/ui/overlay/favorites.go.
+	ActionBrowserToggleFavorite Action = "browser_toggle_favorite"
+	ActionBrowserFavorites      Action = "browser_favorites"
 )
 
 // SectionPane is the help section name for pane-related keybindings.
@@ -134,6 +142,7 @@ var validBrowserActions = map[Action]bool{
 	ActionBrowserReview: true, ActionBrowserToggleScope: true, ActionBrowserRefresh: true,
 	ActionBrowserToggleHidden: true, ActionBrowserFocusPane: true,
 	ActionBrowserQuit: true, ActionBrowserHelp: true,
+	ActionBrowserToggleFavorite: true, ActionBrowserFavorites: true,
 }
 
 // isBrowserAction reports whether a is a browser action, as opposed to a
@@ -366,18 +375,20 @@ func defaultBrowserBindings() map[string]Action {
 		"pgdown": ActionBrowserPageDown,
 		"home":   ActionBrowserHome,
 		"end":    ActionBrowserEnd,
-		"right": ActionBrowserEnter,
-		"enter": ActionBrowserEnter,
-		"left":  ActionBrowserUpLevel,
-		"/":     ActionBrowserFilter,
-		"esc":   ActionBrowserDismiss,
-		"d":     ActionBrowserReview,
-		"t":     ActionBrowserToggleScope,
-		"r":     ActionBrowserRefresh,
-		".":     ActionBrowserToggleHidden,
-		"tab":   ActionBrowserFocusPane,
-		"q":     ActionBrowserQuit,
-		"?":     ActionBrowserHelp,
+		"right":  ActionBrowserEnter,
+		"enter":  ActionBrowserEnter,
+		"left":   ActionBrowserUpLevel,
+		"/":      ActionBrowserFilter,
+		"esc":    ActionBrowserDismiss,
+		"d":      ActionBrowserReview,
+		"t":      ActionBrowserToggleScope,
+		"r":      ActionBrowserRefresh,
+		".":      ActionBrowserToggleHidden,
+		"tab":    ActionBrowserFocusPane,
+		"q":      ActionBrowserQuit,
+		"?":      ActionBrowserHelp,
+		"ctrl+f": ActionBrowserToggleFavorite,
+		"F":      ActionBrowserFavorites,
 	}
 }
 

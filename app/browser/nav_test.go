@@ -226,3 +226,80 @@ func TestNav_ParentColumnDerivedFromCurrentPath(t *testing.T) {
 	}
 	assert.Contains(t, names, "child")
 }
+
+// TestNav_GoTo_JumpsToArbitraryPath verifies the favorites popup's use case:
+// jumping straight to an unrelated directory, not just a child or the parent.
+func TestNav_GoTo_JumpsToArbitraryPath(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+	mustMkdir(t, filepath.Join(other, "sub"))
+
+	nav, cmd := NewNav(root, false, nil)
+	runAndApply(t, nav, cmd)
+
+	goCmd := nav.GoTo(other)
+	require.NotNil(t, goCmd)
+	runAndApply(t, nav, goCmd)
+
+	assert.Equal(t, other, nav.Path())
+	assert.Equal(t, 0, nav.Cursor())
+}
+
+// TestNav_GoTo_SamePathIsNoOp mirrors Up's filesystem-root guard: jumping to
+// the directory already current must not reload or reset the cursor.
+func TestNav_GoTo_SamePathIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, "app"))
+
+	nav, cmd := NewNav(root, false, nil)
+	runAndApply(t, nav, cmd)
+	nav.SetCursor(indexOf(t, nav.Current(), "app"))
+
+	goCmd := nav.GoTo(root)
+
+	assert.Nil(t, goCmd, "jumping to the current path must be a no-op")
+	assert.Equal(t, indexOf(t, nav.Current(), "app"), nav.Cursor(), "cursor must be untouched")
+}
+
+// TestNav_GoTo_RestoresCursorMemory verifies GoTo consults the same per-path
+// cursor memory Up does: returning to a previously-visited directory lands
+// back where the cursor was, not at the top of the list.
+func TestNav_GoTo_RestoresCursorMemory(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+	mustMkdir(t, filepath.Join(root, "an-earlier-dir"))
+	mustMkdir(t, filepath.Join(root, "app"))
+	mustMkdir(t, filepath.Join(root, "zzz-later-dir"))
+
+	nav, cmd := NewNav(root, false, nil)
+	runAndApply(t, nav, cmd)
+
+	appIndex := indexOf(t, nav.Current(), "app")
+	require.NotZero(t, appIndex, "test setup must put app after index 0")
+	nav.SetCursor(appIndex)
+
+	runAndApply(t, nav, nav.GoTo(other))
+	require.Equal(t, other, nav.Path())
+
+	runAndApply(t, nav, nav.GoTo(root))
+
+	require.Equal(t, root, nav.Path())
+	assert.Equal(t, appIndex, nav.Cursor(), "cursor must land back on app/, restored from memory")
+}
+
+// TestNav_GoTo_DropsActiveFilter verifies GoTo follows the same
+// filter-resets-on-directory-change rule as Enter and Up.
+func TestNav_GoTo_DropsActiveFilter(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+
+	nav, cmd := NewNav(root, false, nil)
+	runAndApply(t, nav, cmd)
+	nav.FilterStart()
+	nav.FilterAppend('x')
+	require.True(t, nav.Filter().Active())
+
+	runAndApply(t, nav, nav.GoTo(other))
+
+	assert.False(t, nav.Filter().Active(), "GoTo must drop any active filter")
+}
